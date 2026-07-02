@@ -124,22 +124,24 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
           )}
         </div>
 
-        {/* Footer: tools + model info */}
-        <div className="px-3.5 pt-1.5 pb-2.5 flex items-center gap-2 border-t border-border-soft/40 min-w-0">
+        {/* Footer row 1: tools + model info */}
+        <div className="px-3.5 pt-1.5 pb-2 flex items-center gap-2 border-t border-border-soft/40 min-w-0">
           <div className="flex-shrink-0">
             <ToolsDropdown />
           </div>
           <div className="w-px h-3 bg-border-soft flex-shrink-0" />
-          <span className="text-[10.5px] text-ink-faint truncate min-w-0 flex-1">
+          <span className="text-[10.5px] text-ink-faint truncate min-w-0 max-w-[180px] sm:max-w-[280px]">
             {providerLabel}{chat?.model ? ` · ${chat.model.split("/").pop()}` : ""}
           </span>
-          {busy && (
-            <span className="text-[10.5px] text-accent-2 flex items-center gap-1 flex-shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-2 animate-pulse" />
-              Generating…
-            </span>
-          )}
         </div>
+
+        {/* Footer row 2: generating indicator — only when busy */}
+        {busy && (
+          <div className="px-3.5 pb-2.5 flex items-center gap-1.5 -mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-2 animate-pulse flex-shrink-0" />
+            <span className="text-[10.5px] text-accent-2">Generating…</span>
+          </div>
+        )}
       </div>
     </div>
   );
