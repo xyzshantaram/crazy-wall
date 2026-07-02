@@ -9,9 +9,10 @@
  */
 
 import { useRef, useState } from "react";
-import { useGraphStore } from "../../stores/graphStore";
-import { PROVIDERS } from "../../lib/providers/registry";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { PROVIDERS, type ProviderId } from "../../lib/providers/registry";
 import { ToolsDropdown } from "./ToolsDropdown";
+import { ModelPicker } from "../settings/ModelPicker";
 
 interface Props {
   chatId: string;
@@ -21,11 +22,16 @@ interface Props {
   onCancel: () => void;
 }
 
-export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCancel }: Props) {
+export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel }: Omit<Props, "chatId"> & { chatId: string }) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const chat = useGraphStore((s) => s.chats[chatId]);
-  const providerLabel = PROVIDERS[chat?.provider as keyof typeof PROVIDERS]?.label ?? chat?.provider ?? "";
+
+  // Active provider/model from settings — used for the *next* submission
+  const activeProvider = useSettingsStore((s) => s.activeProvider);
+  const setActiveProvider = useSettingsStore((s) => s.setActiveProvider);
+  const apiKeys = useSettingsStore((s) => s.apiKeys);
+  const models = useSettingsStore((s) => s.models);
+  const setModel = useSettingsStore((s) => s.setModel);
 
   const selectedCount = selectedNodeIds.size;
   const placeholder = selectedCount > 0
@@ -48,12 +54,9 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
     if (!trimmed || busy) return;
     onSubmit(trimmed, Array.from(selectedNodeIds));
     setValue("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "22px";
-    }
+    if (textareaRef.current) textareaRef.current.style.height = "22px";
   };
 
-  // Auto-resize textarea up to 4 rows.
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
     const el = e.target;
@@ -61,13 +64,16 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
   };
 
+  // Ghost select style — blends into the footer bar
+  const ghostSelect = "bg-transparent border-none outline-none text-[10.5px] text-ink-faint hover:text-ink-dim cursor-pointer transition-colors min-w-0 max-w-[120px]";
+
   return (
     <div
       data-no-pan
       className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-[624px] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-32px)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      {/* No overflow-hidden — it creates a stacking context that traps the ToolsDropdown fixed popover on WebKit */}
+      {/* No overflow-hidden — traps ToolsDropdown fixed popover on WebKit */}
       <div className={`
         flex flex-col bg-surface/95 backdrop-blur-md border rounded-2xl shadow-panel
         transition-colors duration-150
@@ -124,15 +130,39 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
           )}
         </div>
 
-        {/* Footer: tools · model · generating */}
-        <div className="px-3.5 pt-1.5 pb-2.5 flex items-center gap-2 border-t border-border-soft/40">
-          <div className="flex-shrink-0">
+        {/* Footer: tools · provider · model · generating */}
+        <div className="px-3.5 pt-1.5 pb-2.5 flex items-center gap-2 border-t border-border-soft/40 min-w-0">
+          <div className="flex-shrink-0" data-no-drag>
             <ToolsDropdown />
           </div>
           <div className="w-px h-3 bg-border-soft flex-shrink-0" />
-          <span className="text-[10.5px] text-ink-faint truncate flex-1 min-w-0">
-            {providerLabel}{chat?.model ? ` · ${chat.model.split("/").pop()}` : ""}
-          </span>
+
+          {/* Provider selector */}
+          <select
+            value={activeProvider}
+            onChange={(e) => setActiveProvider(e.target.value as ProviderId)}
+            disabled={busy}
+            className={`flex-shrink-0 ${ghostSelect}`}
+            title="Provider"
+          >
+            {Object.values(PROVIDERS).map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+
+          <div className="w-px h-3 bg-border-soft flex-shrink-0" />
+
+          {/* Model selector */}
+          <div className="flex-1 min-w-0">
+            <ModelPicker
+              providerId={activeProvider}
+              apiKey={apiKeys[activeProvider]}
+              value={models[activeProvider]}
+              onChange={(m) => setModel(activeProvider, m)}
+              className={`w-full ${ghostSelect} max-w-none`}
+            />
+          </div>
+
           {busy && (
             <span className="text-[10.5px] text-accent-2 flex items-center gap-1 flex-shrink-0 ml-1">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-2 animate-pulse" />
