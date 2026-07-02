@@ -187,6 +187,13 @@ export function ChatCanvas({ chatId }: Props) {
                 onUpdate={setUpdateNodeId}
                 onShowCitations={setCitationsNodeId}
                 onPeek={setPeekNodeId}
+                onFitNode={(id) => {
+                  const n = allNodes[id];
+                  if (!n || !containerRef.current) return;
+                  const rect = containerRef.current.getBoundingClientRect();
+                  const framed = computeFramingViewport([n], { width: rect.width, height: rect.height }, { padding: 80, maxZoom: 1.5 });
+                  if (framed) setViewport(chatId, framed);
+                }}
                 generating={busyNodeIds.has(node.id) || node.generating}
               />
             </motion.div>

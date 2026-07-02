@@ -33,12 +33,14 @@ interface Props {
   onShowCitations: (nodeId: string) => void;
   /** Called after a long-press — parent renders the peek overlay outside the canvas transform. */
   onPeek: (nodeId: string) => void;
+  /** Called on double-tap/click — parent fits this node to the viewport. */
+  onFitNode: (nodeId: string) => void;
   generating?: boolean;
 }
 
 export function NodeCard({
   node, selected, highlighted, zoom, selectedIds,
-  onSelect, onExpand, onFork, onExplain, onUpdate, onShowCitations, onPeek, generating,
+  onSelect, onExpand, onFork, onExplain, onUpdate, onShowCitations, onPeek, onFitNode, generating,
 }: Props) {
   const setNodePosition = useGraphStore((s) => s.setNodePosition);
   const moveNodes = useGraphStore((s) => s.moveNodes);
@@ -63,6 +65,8 @@ export function NodeCard({
   }, []);
 
   const didDrag = useRef(false);
+  const lastClickTime = useRef(0);
+  const DOUBLE_TAP_MS = 300;
 
   // Long-press to peek — fires after 500ms hold without movement
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,6 +112,13 @@ export function NodeCard({
     if (didDrag.current) return;
     if (longPressActive.current) { longPressActive.current = false; return; }
     if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+    const now = Date.now();
+    if (now - lastClickTime.current < DOUBLE_TAP_MS) {
+      lastClickTime.current = 0;
+      onFitNode(node.id);
+      return;
+    }
+    lastClickTime.current = now;
     onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
   };
 
@@ -119,6 +130,13 @@ export function NodeCard({
     const handlePromptClick = (e: React.MouseEvent) => {
       if (didDrag.current) return;
       if (longPressActive.current) { longPressActive.current = false; return; }
+      const now = Date.now();
+      if (now - lastClickTime.current < DOUBLE_TAP_MS) {
+        lastClickTime.current = 0;
+        onFitNode(node.id);
+        return;
+      }
+      lastClickTime.current = now;
       onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
       if (promptTruncated) setPromptExpanded((v) => !v);
     };
