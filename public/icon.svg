@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad-accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a898ff"/>
+      <stop offset="100%" stop-color="#7c6cff"/>
+    </linearGradient>
+    <linearGradient id="grad-cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6ef5e8"/>
+      <stop offset="100%" stop-color="#4ee1d6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="108" fill="#0a0c14"/>
+
+  <!-- Edges -->
+  <line x1="256" y1="200" x2="174" y2="268" stroke="#7c6cff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="256" y1="200" x2="338" y2="268" stroke="#7c6cff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="174" y1="348" x2="174" y2="392" stroke="#555878" stroke-width="3" stroke-linecap="round"/>
+  <line x1="338" y1="348" x2="338" y2="392" stroke="#555878" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- ROOT node -->
+  <rect x="182" y="106" width="148" height="94" rx="18" fill="#1a1d2e" stroke="#8878ff" stroke-width="3"/>
+  <rect x="204" y="132" width="104" height="11" rx="5.5" fill="url(#grad-accent)"/>
+  <rect x="204" y="151" width="76" height="8" rx="4" fill="#9d90ff" opacity="0.6"/>
+  <rect x="204" y="165" width="92" height="8" rx="4" fill="#9d90ff" opacity="0.38"/>
+
+  <!-- TOPIC left — cyan -->
+  <rect x="100" y="268" width="148" height="80" rx="16" fill="#141820" stroke="#4ee1d6" stroke-width="3"/>
+  <rect x="122" y="291" width="104" height="11" rx="5.5" fill="url(#grad-cyan)"/>
+  <rect x="122" y="310" width="72" height="8" rx="4" fill="#4ee1d6" opacity="0.55"/>
+  <rect x="122" y="324" width="88" height="8" rx="4" fill="#4ee1d6" opacity="0.33"/>
+
+  <!-- TOPIC right — indigo -->
+  <rect x="264" y="268" width="148" height="80" rx="16" fill="#141820" stroke="#8878ff" stroke-width="3"/>
+  <rect x="286" y="291" width="104" height="11" rx="5.5" fill="url(#grad-accent)"/>
+  <rect x="286" y="310" width="76" height="8" rx="4" fill="#9d90ff" opacity="0.55"/>
+  <rect x="286" y="324" width="90" height="8" rx="4" fill="#9d90ff" opacity="0.33"/>
+
+  <!-- LEAF left -->
+  <rect x="110" y="396" width="128" height="54" rx="13" fill="#111420" stroke="#4a4e6a" stroke-width="2.5"/>
+  <rect x="130" y="414" width="88" height="8" rx="4" fill="#6b6f96" opacity="0.9"/>
+  <rect x="130" y="428" width="60" height="6.5" rx="3.25" fill="#6b6f96" opacity="0.5"/>
+
+  <!-- LEAF right -->
+  <rect x="274" y="396" width="128" height="54" rx="13" fill="#111420" stroke="#4a4e6a" stroke-width="2.5"/>
+  <rect x="294" y="414" width="88" height="8" rx="4" fill="#6b6f96" opacity="0.9"/>
+  <rect x="294" y="428" width="60" height="6.5" rx="3.25" fill="#6b6f96" opacity="0.5"/>
+</svg>

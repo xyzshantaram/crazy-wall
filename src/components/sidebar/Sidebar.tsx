@@ -4,7 +4,7 @@
  * edge-hover affordance or the top-left toggle.
  */
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useGraphStore } from "../../stores/graphStore";
 import { PROVIDERS } from "../../lib/providers/registry";
 
@@ -12,9 +12,10 @@ interface Props {
   collapsed: boolean;
   onExpand: () => void;
   onOpenSettings: () => void;
+  onShare: (chatId: string) => void;
 }
 
-export function Sidebar({ collapsed, onExpand, onOpenSettings }: Props) {
+export function Sidebar({ collapsed, onExpand, onOpenSettings, onShare }: Props) {
   const chatOrder = useGraphStore((s) => s.chatOrder);
   const chats = useGraphStore((s) => s.chats);
   const activeChatId = useGraphStore((s) => s.activeChatId);
@@ -25,6 +26,18 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings }: Props) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside.
+  useEffect(() => {
+    if (!menuOpenId) return;
+    const handler = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpenId(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpenId]);
 
   return (
     <div
@@ -66,10 +79,11 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings }: Props) {
             const chat = chats[id];
             if (!chat) return null;
             const isActive = id === activeChatId;
+            const isMenuOpen = menuOpenId === id;
             return (
               <div
                 key={id}
-                onClick={() => setActiveChat(id)}
+                onClick={() => { if (!isMenuOpen) setActiveChat(id); }}
                 className={`group relative flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
                   isActive ? "bg-white/[0.07] text-ink" : "text-ink-dim hover:bg-white/[0.04] hover:text-ink"
                 }`}
@@ -95,6 +109,7 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings }: Props) {
                       }
                       if (e.key === "Escape") setEditingId(null);
                     }}
+                    onClick={(e) => e.stopPropagation()}
                     className="flex-1 bg-transparent border-none outline-none text-[13px] text-ink min-w-0"
                   />
                 ) : (
@@ -109,20 +124,82 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings }: Props) {
                     {chat.title}
                   </span>
                 )}
-                <span className="text-[10px] text-ink-faint flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {PROVIDERS[chat.provider as keyof typeof PROVIDERS]?.label ?? chat.provider}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteChat(id);
-                  }}
-                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-md text-ink-faint opacity-0 group-hover:opacity-100 hover:text-bad hover:bg-bad/10 transition-all"
-                >
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </button>
+
+                {/* Provider label — hidden when menu open */}
+                {!isMenuOpen && (
+                  <span className="text-[10px] text-ink-faint flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {PROVIDERS[chat.provider as keyof typeof PROVIDERS]?.label ?? chat.provider}
+                  </span>
+                )}
+
+                {/* Hamburger button */}
+                <div className="relative flex-shrink-0" ref={isMenuOpen ? menuRef : undefined}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpenId(isMenuOpen ? null : id);
+                    }}
+                    className={`w-5 h-5 flex items-center justify-center rounded-md transition-all
+                      ${isMenuOpen
+                        ? "text-ink bg-white/10 opacity-100"
+                        : "text-ink-faint opacity-0 group-hover:opacity-100 hover:text-ink hover:bg-white/6"}`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="3" r="1.4" fill="currentColor"/>
+                      <circle cx="8" cy="8" r="1.4" fill="currentColor"/>
+                      <circle cx="8" cy="13" r="1.4" fill="currentColor"/>
+                    </svg>
+                  </button>
+
+                  {isMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-xl shadow-panel z-50 py-1 overflow-hidden">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(null);
+                          onShare(id);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] text-ink-dim hover:text-ink hover:bg-white/5 transition-colors text-left"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                          <circle cx="13" cy="4" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                          <circle cx="3" cy="8" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                          <circle cx="13" cy="12" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                          <path d="M5 7l6-2M5 9l6 2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                        </svg>
+                        Share / Sync
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(null);
+                          setEditingId(id);
+                          setEditValue(chat.title);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] text-ink-dim hover:text-ink hover:bg-white/5 transition-colors text-left"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                          <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                        </svg>
+                        Rename
+                      </button>
+                      <div className="my-1 border-t border-border-soft" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(null);
+                          deleteChat(id);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] text-bad/80 hover:text-bad hover:bg-bad/5 transition-colors text-left"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                          <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        Delete wall
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

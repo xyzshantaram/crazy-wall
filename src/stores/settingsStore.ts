@@ -30,6 +30,12 @@ interface SettingsState {
   enabledTools: Record<ToolId, boolean>;
   nostr: NostrIdentity | null;
   relays: string[];
+  /**
+   * Per-chat last-used P2P room code. Stored so the receiving device
+   * remembers the code and subsequent syncs are one-tap.
+   * Key: chatId, value: 6-char room code.
+   */
+  shareCodes: Record<string, string>;
 
   setActiveProvider: (id: ProviderId) => void;
   setApiKey: (id: ProviderId, key: string) => void;
@@ -38,6 +44,7 @@ interface SettingsState {
   setToolEnabled: (tool: ToolId, enabled: boolean) => void;
   setNostrIdentity: (identity: NostrIdentity | null) => void;
   setRelays: (relays: string[]) => void;
+  setShareCode: (chatId: string, code: string) => void;
 
   isConfigured: () => boolean;
 }
@@ -56,6 +63,7 @@ export const useSettingsStore = create<SettingsState>()(
       enabledTools: { wikipedia: true, tavily: true },
       nostr: null,
       relays: ["wss://relay.damus.io", "wss://relay.primal.net", "wss://relay.nostr.band"],
+      shareCodes: {},
 
       setActiveProvider: (id) => set({ activeProvider: id }),
       setApiKey: (id, key) => set((s) => ({ apiKeys: { ...s.apiKeys, [id]: key } })),
@@ -65,6 +73,8 @@ export const useSettingsStore = create<SettingsState>()(
         set((s) => ({ enabledTools: { ...s.enabledTools, [tool]: enabled } })),
       setNostrIdentity: (identity) => set({ nostr: identity }),
       setRelays: (relays) => set({ relays }),
+      setShareCode: (chatId, code) =>
+        set((s) => ({ shareCodes: { ...s.shareCodes, [chatId]: code } })),
 
       isConfigured: () => {
         const s = get();

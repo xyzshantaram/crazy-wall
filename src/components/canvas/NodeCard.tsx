@@ -4,7 +4,7 @@
  * action menu) and the rendered content body underneath.
  */
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useDrag } from "@use-gesture/react";
 import type { GraphNode } from "../../types/graph";
 import { NodeContentRenderer } from "../widgets/NodeContentRenderer";
@@ -40,6 +40,20 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCitations, setShowCitations] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
+  const [promptTruncated, setPromptTruncated] = useState(false);
+  const promptTextRef = useRef<HTMLParagraphElement>(null);
+
+  // Detect whether the collapsed prompt text overflows its container.
+  // Uses ResizeObserver so it re-checks if the card is resized/zoomed.
+  useEffect(() => {
+    const el = promptTextRef.current;
+    if (!el) return;
+    const check = () => setPromptTruncated(el.scrollWidth > el.clientWidth);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Track drag state in a ref to avoid re-renders on every drag frame.
   const didDrag = useRef(false);
@@ -81,7 +95,7 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
   if (node.kind === "prompt") {
     const handlePromptClick = (_e: React.MouseEvent) => {
       if (didDrag.current) return;
-      setPromptExpanded((v) => !v);
+      if (promptTruncated) setPromptExpanded((v) => !v);
     };
     return (
       <>
@@ -90,7 +104,8 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
           {...bindDrag()}
           onClick={handlePromptClick}
           style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? PROMPT_CARD_WIDTH }}
-          className={`absolute z-10 select-none rounded-xl border transition-all duration-150 cursor-pointer
+          className={`absolute z-10 select-none rounded-xl border transition-all duration-150
+            ${promptTruncated ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}
             ${selected ? "border-warn/70 shadow-[0_0_0_1px_var(--color-warn),0_8px_24px_-6px_rgba(245,185,90,0.3)]" : "border-warn/20 bg-warn/5 shadow-none hover:border-warn/40"}
             ${highlighted ? "ring-2 ring-warn/50 ring-offset-1 ring-offset-void" : ""}`}
         >
@@ -99,9 +114,11 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
               <path d="M8 2C4.69 2 2 4.36 2 7.25c0 1.7.85 3.2 2.18 4.17L3.5 14l2.7-1.25C6.74 12.9 7.36 13 8 13c3.31 0 6-2.36 6-5.75S11.31 2 8 2z" fill="currentColor" fillOpacity="0.8"/>
             </svg>
             {promptExpanded ? (
-              <p className="text-[12.5px] text-ink-dim leading-snug flex-1 min-w-0 break-words whitespace-pre-wrap">{node.summary ?? node.title}</p>
+              <p className="text-[15px] text-ink-dim leading-snug flex-1 min-w-0 break-words whitespace-pre-wrap">{node.summary ?? node.title}</p>
             ) : (
-              <p className="text-[14px] font-semibold text-ink-dim leading-none flex-1 min-w-0 truncate">{node.summary ?? node.title}</p>
+              <p ref={promptTextRef} className="text-[15px] font-semibold text-ink-dim leading-none flex-1 min-w-0 truncate">
+                {node.summary ?? node.title}
+              </p>
             )}
           </div>
         </div>

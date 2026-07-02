@@ -3,6 +3,7 @@ import { useGraphStore } from "./stores/graphStore";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { ChatCanvas } from "./components/canvas/ChatCanvas";
 import { SettingsPanel } from "./components/settings/SettingsPanel";
+import { SharePanel } from "./components/canvas/SharePanel";
 import { ToastHost } from "./components/common/ToastHost";
 import { ConfirmationHost } from "./components/dashboard/ConfirmationHost";
 import { useSettingsStore } from "./stores/settingsStore";
@@ -17,6 +18,7 @@ function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareChatId, setShareChatId] = useState<string | null>(null);
   const isConfigured = useSettingsStore((s) => s.isConfigured());
 
   useEffect(() => {
@@ -55,6 +57,7 @@ function App() {
         collapsed={sidebarCollapsed}
         onExpand={() => setSidebarCollapsed((c) => !c)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onShare={(id) => setShareChatId(id)}
       />
 
       <div className="relative flex-1 min-w-0">
@@ -80,6 +83,7 @@ function App() {
       </div>
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {shareChatId && <SharePanel chatId={shareChatId} onClose={() => setShareChatId(null)} />}
       <ConfirmationHost />
       <ToastHost />
     </div>

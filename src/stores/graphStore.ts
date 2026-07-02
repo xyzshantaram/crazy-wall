@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { AppState, Chat, GraphEdge, GraphNode, RelationType, Viewport, PromptLogEntry } from "../types/graph";
 import type { WidgetNode } from "../types/widget";
+import type { WallPayload } from "../lib/export/serialize";
 import * as db from "../lib/persistence";
 import { PROVIDERS, type ProviderId } from "../lib/providers/registry";
 
@@ -49,6 +50,9 @@ interface GraphState extends AppState {
   deleteEdge: (edgeId: string) => void;
 
   duplicateNode: (nodeId: string) => string | null;
+
+  /** Import a full wall payload received via P2P transfer. Merges into existing store. */
+  importWall: (payload: WallPayload) => void;
 }
 
 function nowIso() {
@@ -430,6 +434,42 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
       return { nodes, chats };
     });
     return id;
+  },
+
+  importWall: (payload) => {
+    set((s) => {
+      const newChats = { ...s.chats };
+      const newNodes = { ...s.nodes };
+      const newEdges = { ...s.edges };
+      let newOrder = [...s.chatOrder];
+
+      // Upsert chat
+      newChats[payload.chat.id] = payload.chat;
+      if (!newOrder.includes(payload.chat.id)) {
+        newOrder = [payload.chat.id, ...newOrder];
+      }
+      void db.putChat(payload.chat);
+
+      // Upsert nodes
+      for (const node of payload.nodes) {
+        newNodes[node.id] = node;
+        void db.putNode(node);
+      }
+
+      // Upsert edges
+      for (const edge of payload.edges) {
+        newEdges[edge.id] = edge;
+        void db.putEdge(edge);
+      }
+
+      return {
+        chats: newChats,
+        nodes: newNodes,
+        edges: newEdges,
+        chatOrder: newOrder,
+        activeChatId: payload.chat.id,
+      };
+    });
   },
 }));
 
