@@ -32,7 +32,7 @@ export function CanvasToolbar({
   return (
     <div
       data-no-pan
-      className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] right-4 sm:bottom-5 sm:right-5 flex items-center gap-0.5 bg-surface border border-border rounded-xl shadow-panel px-1 py-1 z-20"
+      className="absolute bottom-48 right-4 sm:bottom-5 sm:right-5 flex items-center gap-0.5 bg-surface border border-border rounded-xl shadow-panel px-1 py-1 z-20"
     >
       {/* Thinking trace */}
       {thinkingAvailable && (
