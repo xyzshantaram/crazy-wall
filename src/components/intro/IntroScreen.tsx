@@ -78,12 +78,12 @@ export function IntroScreen({ chatId, onSubmit, busy }: Props) {
             disabled={busy}
             className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
           />
-          <div className="flex items-center justify-between px-3 pb-3">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between gap-2 px-3 pb-3">
+            <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
               <select
                 value={activeProvider}
                 onChange={(e) => setActiveProvider(e.target.value as ProviderId)}
-                className="bg-surface-2 border border-border-soft rounded-lg px-2 py-1 text-[11.5px] text-ink-dim focus:outline-none"
+                className="flex-shrink-0 bg-surface-2 border border-border-soft rounded-lg px-2 py-1 text-[11.5px] text-ink-dim focus:outline-none"
               >
                 {Object.values(PROVIDERS).map((p) => (
                   <option key={p.id} value={p.id}>
@@ -96,13 +96,13 @@ export function IntroScreen({ chatId, onSubmit, busy }: Props) {
                 apiKey={apiKeys[activeProvider]}
                 value={models[activeProvider]}
                 onChange={(m) => setModel(activeProvider, m)}
-                className="bg-surface-2 border border-border-soft rounded-lg px-2 py-1 text-[11.5px] text-ink-dim focus:outline-none max-w-[180px]"
+                className="min-w-0 bg-surface-2 border border-border-soft rounded-lg px-2 py-1 text-[11.5px] text-ink-dim focus:outline-none max-w-[140px]"
               />
             </div>
             <button
               onClick={handleSubmit}
               disabled={busy || !value.trim()}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {busy ? "Generating…" : "Generate"}
               {!busy && (
