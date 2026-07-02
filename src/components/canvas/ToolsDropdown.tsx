@@ -46,7 +46,7 @@ export function ToolsDropdown() {
       <button
         ref={triggerRef}
         onClick={handleOpen}
-        className={`flex items-center gap-1 text-[10.5px] transition-colors rounded px-1 py-0.5 -mx-1 ${
+        className={`flex items-center gap-1 text-[10.5px] transition-colors rounded px-1 py-0.5 ${
           open ? "text-accent bg-accent/10" : "text-ink-faint hover:text-ink-dim"
         }`}
         title="Search tools"
