@@ -20,6 +20,7 @@ interface Props {
   selected: boolean;
   highlighted?: boolean;
   zoom: number;
+  selectedIds: Set<string>;
   onSelect: (nodeId: string, additive: boolean) => void;
   onExpand: (nodeId: string) => void;
   onFork: (nodeId: string) => void;
@@ -28,8 +29,9 @@ interface Props {
   generating?: boolean;
 }
 
-export function NodeCard({ node, selected, highlighted, zoom, onSelect, onExpand, onFork, onExplain, onUpdate, generating }: Props) {
+export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSelect, onExpand, onFork, onExplain, onUpdate, generating }: Props) {
   const setNodePosition = useGraphStore((s) => s.setNodePosition);
+  const moveNodes = useGraphStore((s) => s.moveNodes);
   const toggleCollapsed = useGraphStore((s) => s.toggleCollapsed);
   const togglePinned = useGraphStore((s) => s.togglePinned);
   const deleteNode = useGraphStore((s) => s.deleteNode);
@@ -49,10 +51,19 @@ export function NodeCard({ node, selected, highlighted, zoom, onSelect, onExpand
       if (!first) didDrag.current = Math.hypot(mx, my) > 4;
       if (last) setTimeout(() => { didDrag.current = false; }, 0);
       if (first) return;
-      setNodePosition(node.id, {
-        x: node.position.x + dx / zoom,
-        y: node.position.y + dy / zoom,
-      });
+      const cdx = dx / zoom;
+      const cdy = dy / zoom;
+      // If this node is part of a multi-selection, move all selected nodes together.
+      if (selected && selectedIds.size > 1) {
+        const deltas: Record<string, { dx: number; dy: number }> = {};
+        selectedIds.forEach((id) => { deltas[id] = { dx: cdx, dy: cdy }; });
+        moveNodes(deltas);
+      } else {
+        setNodePosition(node.id, {
+          x: node.position.x + cdx,
+          y: node.position.y + cdy,
+        });
+      }
     },
     { threshold: 4, pointer: { capture: true } },
   );
@@ -90,7 +101,7 @@ export function NodeCard({ node, selected, highlighted, zoom, onSelect, onExpand
             {promptExpanded ? (
               <p className="text-[12.5px] text-ink-dim leading-snug flex-1 min-w-0 break-words whitespace-pre-wrap">{node.summary ?? node.title}</p>
             ) : (
-              <p className="text-[12.5px] font-semibold text-ink-dim leading-none flex-1 min-w-0 truncate">{node.summary ?? node.title}</p>
+              <p className="text-[14px] font-semibold text-ink-dim leading-none flex-1 min-w-0 truncate">{node.summary ?? node.title}</p>
             )}
           </div>
         </div>

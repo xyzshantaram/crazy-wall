@@ -38,6 +38,7 @@ interface GraphState extends AppState {
   updateNode: (nodeId: string, patch: Partial<GraphNode>) => void;
   updateNodeContent: (nodeId: string, content: GraphNode["content"]) => void;
   setNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
+  moveNodes: (deltas: Record<string, { dx: number; dy: number }>) => void;
   setNodeSize: (nodeId: string, size: { w: number; h: number }) => void;
   toggleCollapsed: (nodeId: string) => void;
   togglePinned: (nodeId: string) => void;
@@ -281,6 +282,20 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
       const updated = { ...node, position };
       void db.putNode(updated);
       return { nodes: { ...s.nodes, [nodeId]: updated } };
+    });
+  },
+
+  moveNodes: (deltas) => {
+    set((s) => {
+      const updated: Record<string, GraphNode> = { ...s.nodes };
+      for (const [id, { dx, dy }] of Object.entries(deltas)) {
+        const node = updated[id];
+        if (!node) continue;
+        const moved = { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } };
+        updated[id] = moved;
+        void db.putNode(moved);
+      }
+      return { nodes: updated };
     });
   },
 

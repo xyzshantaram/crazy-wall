@@ -146,6 +146,7 @@ export function ChatCanvas({ chatId }: Props) {
                 selected={selected.has(node.id)}
                 highlighted={highlightedNodeIds.has(node.id)}
                 zoom={chat.viewport.zoom}
+                selectedIds={selected}
                 onSelect={handleSelect}
                 onExpand={(id) => void expandNode(chatId, id)}
                 onFork={handleFork}
