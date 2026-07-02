@@ -191,7 +191,14 @@ export function ChatCanvas({ chatId }: Props) {
                   const n = allNodes[id];
                   if (!n || !containerRef.current) return;
                   const rect = containerRef.current.getBoundingClientRect();
-                  const framed = computeFramingViewport([n], { width: rect.width, height: rect.height }, { padding: 80, maxZoom: 1.5 });
+                  // Reserve space for the chat bar (~130px) and toolbar (~60px above bar on mobile)
+                  // so the node fills the visible canvas area, not the area under the UI chrome.
+                  const chatBarHeight = 130;
+                  const framed = computeFramingViewport(
+                    [n],
+                    { width: rect.width, height: rect.height - chatBarHeight },
+                    { padding: 32, maxZoom: 4, minZoom: 0.15 },
+                  );
                   if (framed) setViewport(chatId, framed);
                 }}
                 generating={busyNodeIds.has(node.id) || node.generating}
