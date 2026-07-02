@@ -5,9 +5,6 @@ node_modules/
 dist/
 dist-ssr/
 
-# pnpm lockfile — not tracked; contributors run pnpm install freely
-pnpm-lock.yaml
-
 # Env / secrets
 *.local
 .env
