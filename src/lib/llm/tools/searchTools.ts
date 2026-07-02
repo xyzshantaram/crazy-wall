@@ -16,7 +16,7 @@ import type { ToolDefinition } from "./types";
 export const wikipediaSearchTool: ToolDefinition = {
   name: "wikipedia_search",
   description:
-    "Search Wikipedia for articles matching a query. Returns a list of matching article titles and short descriptions. Use this to find the right article title before calling wikipedia_fetch. Best for factual questions, historical events, scientific concepts, people, places, companies, and well-known topics.",
+    "Search Wikipedia for articles matching a query. Returns a list of matching article titles, short descriptions, and URLs. Use this to find the right article before calling wikipedia_fetch. Best for factual questions, historical events, scientific concepts, people, places, companies.",
   parameters: {
     type: "object",
     properties: {
@@ -45,7 +45,10 @@ export const wikipediaSearchTool: ToolDefinition = {
       const results = data.query?.search ?? [];
       if (results.length === 0) return `No Wikipedia articles found for "${query}".`;
       return results
-        .map((r, i) => `${i + 1}. **${r.title}** (${r.wordcount} words)\n   ${r.snippet.replace(/<[^>]+>/g, "")}`)
+        .map((r, i) => {
+          const articleUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}`;
+          return `${i + 1}. **${r.title}** (${r.wordcount} words)\n   URL: ${articleUrl}\n   ${r.snippet.replace(/<[^>]+>/g, "")}`;
+        })
         .join("\n\n");
     } catch (err) {
       return `Wikipedia search error: ${err instanceof Error ? err.message : String(err)}`;
@@ -89,13 +92,17 @@ export const wikipediaFetchTool: ToolDefinition = {
         data.description ? `*${data.description}*` : "",
         "",
         data.extract ?? "(No extract available.)",
-        "",
-        data.content_urls?.desktop?.page ? `Source: ${data.content_urls.desktop.page}` : "",
       ].filter((l) => l !== undefined);
 
-      const text = lines.join("\n").trim();
-      // Cap at 6000 chars to stay within token budget.
-      return text.length > 6000 ? `${text.slice(0, 6000)}\n\n... (truncated)` : text;
+      let text = lines.join("\n").trim();
+      if (text.length > 6000) text = `${text.slice(0, 6000)}\n\n... (truncated)`;
+
+      // Append a structured citation block the agent can copy verbatim into the citations[] field.
+      const pageUrl = data.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
+      const citation = { title: `Wikipedia: ${data.title}`, url: pageUrl };
+      text += `\n\nCITATION_JSON: ${JSON.stringify(citation)}`;
+
+      return text;
     } catch (err) {
       return `Wikipedia fetch error: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -168,6 +175,11 @@ export function makeTavilySearchTool(getApiKey: () => string | undefined): ToolD
               .join("\n"),
           ),
         );
+
+        // Append structured citation blocks the agent can copy verbatim into citations[].
+        const citations = results.map((r) => ({ title: r.title, url: r.url }));
+        lines.push(`\nCITATION_JSON_LIST: ${JSON.stringify(citations)}`);
+
         return lines.join("\n\n");
       } catch (err) {
         return `Tavily search error: ${err instanceof Error ? err.message : String(err)}`;

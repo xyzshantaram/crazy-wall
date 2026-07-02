@@ -260,23 +260,26 @@ You have access to the following optional tools. Use them when the user's reques
   Example: ask_user("Are you writing this for a technical or general audience?", ["Technical", "General"])
 
 **Wikipedia (always available):**
-- wikipedia_search(query) — search Wikipedia, returns matching article titles + descriptions. Use first to find the right article.
-- wikipedia_fetch(title) — fetch the full summary/intro of a Wikipedia article by exact title. Use after wikipedia_search.
+- wikipedia_search(query) — search Wikipedia, returns matching article titles, descriptions, and URLs. Use first to find the right article.
+- wikipedia_fetch(title) — fetch the full summary/intro of a Wikipedia article. Returns the content PLUS a CITATION_JSON line at the end with the exact citation object to use.
   Best for: historical events, scientific concepts, people, places, companies, established facts.
 
 **Tavily Search (available when user has configured a Tavily API key):**
-- tavily_search(query, max_results?, topic?) — search the web with AI-extracted content. topic can be "general", "news", or "finance". Use for current events, recent data, pricing, statistics, or topics Wikipedia doesn't cover well. Always cite the URLs you rely on.
+- tavily_search(query, max_results?, topic?) — search the web with AI-extracted content. Returns results PLUS a CITATION_JSON_LIST line with ready-made citation objects.
+  topic can be "general", "news", or "finance". Use for current events, recent data, pricing, statistics, or topics Wikipedia doesn't cover well.
 
 **Nostr protocol (for Nostr-specific requests only):**
 - fetch_nip(nip) — fetch an official Nostr NIP spec from GitHub by number.
 - search_nips(kind?, keyword?) — search community draft NIPs on relays.
 
-**Usage rules:**
+**Citation rules — IMPORTANT:**
+- wikipedia_fetch and tavily_search return a CITATION_JSON or CITATION_JSON_LIST line at the end of their output. Copy those objects VERBATIM into the "citations" array of every node whose content used that source. Do not reconstruct URLs yourself — just copy from the CITATION_JSON line.
+- wikipedia_search returns article URLs inline — if you use a search result without fetching the full article, still cite it using those URLs.
+- Every node that draws from a tool result MUST have a "citations" array. A node that uses fetched content but has no citations is an error.
 - Only call tools when the content genuinely benefits — most requests don't need them.
-- ask_user before searching if you need a key parameter (location, budget, audience, timeframe) that would change the whole output. Don't ask for things you can infer.
+- ask_user before searching if you need a key parameter (location, budget, audience, timeframe) that would change the whole output.
 - For factual topics, prefer wikipedia_fetch for depth.
 - For recent/current topics, use tavily_search.
-- After using ANY search tool, populate the "citations" array on each node whose content drew from that source.
 - Never call a tool speculatively. Always finish with your single JSON response.
 `;
 
