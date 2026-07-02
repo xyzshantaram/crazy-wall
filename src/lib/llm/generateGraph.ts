@@ -19,7 +19,7 @@ import { askUserTool } from "./tools/askUserTool";
 import { useThinkingStore } from "../../stores/thinkingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 
-const MAX_TOOL_STEPS = 12;
+const MAX_TOOL_STEPS = 20;
 
 const MODE_LABEL: Record<SystemPromptOptions["mode"], string> = {
   new_root: "Thinking through your request…",
