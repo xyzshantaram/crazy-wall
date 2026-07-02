@@ -1,17 +1,25 @@
 /**
- * Small viewport control helpers (zoom in/out/reset), split out of
- * CanvasViewport.tsx so that file only exports the component (fast-refresh
- * friendliness) and this hook can be reused (e.g. from keyboard shortcuts).
+ * Viewport control helpers (zoom in/out/reset/fit-all).
+ * Split out of CanvasViewport.tsx for fast-refresh friendliness and reuse.
  */
 
-import type { Viewport } from "../../types/graph";
+import type { GraphNode, Viewport } from "../../types/graph";
+import { computeFramingViewport } from "../../lib/graph/viewportFraming";
 
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 2.5;
+const ZOOM_STEP = 1.25;
 
 export function useViewportControls(viewport: Viewport, onViewportChange: (v: Viewport) => void) {
-  const zoomIn = () => onViewportChange({ ...viewport, zoom: Math.min(MAX_ZOOM, viewport.zoom * 1.2) });
-  const zoomOut = () => onViewportChange({ ...viewport, zoom: Math.max(MIN_ZOOM, viewport.zoom / 1.2) });
+  const zoomIn  = () => onViewportChange({ ...viewport, zoom: Math.min(MAX_ZOOM, viewport.zoom * ZOOM_STEP) });
+  const zoomOut = () => onViewportChange({ ...viewport, zoom: Math.max(MIN_ZOOM, viewport.zoom / ZOOM_STEP) });
   const resetView = () => onViewportChange({ x: 0, y: 0, zoom: 1 });
-  return { zoomIn, zoomOut, resetView };
+
+  const fitAll = (nodes: GraphNode[], containerSize: { width: number; height: number }) => {
+    if (nodes.length === 0) { resetView(); return; }
+    const framed = computeFramingViewport(nodes, containerSize, { padding: 60, maxZoom: 1.2, minZoom: MIN_ZOOM });
+    if (framed) onViewportChange(framed);
+  };
+
+  return { zoomIn, zoomOut, resetView, fitAll };
 }

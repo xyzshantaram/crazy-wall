@@ -4,7 +4,7 @@
  * action menu) and the rendered content body underneath.
  */
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { useDrag } from "@use-gesture/react";
 import type { GraphNode } from "../../types/graph";
 import { NodeContentRenderer } from "../widgets/NodeContentRenderer";
@@ -31,12 +31,14 @@ interface Props {
   onUpdate: (nodeId: string) => void;
   /** Lifted out of NodeCard so CitationsPanel renders outside the canvas transform stacking context. */
   onShowCitations: (nodeId: string) => void;
+  /** Called after a long-press — parent renders the peek overlay outside the canvas transform. */
+  onPeek: (nodeId: string) => void;
   generating?: boolean;
 }
 
 export function NodeCard({
   node, selected, highlighted, zoom, selectedIds,
-  onSelect, onExpand, onFork, onExplain, onUpdate, onShowCitations, generating,
+  onSelect, onExpand, onFork, onExplain, onUpdate, onShowCitations, onPeek, generating,
 }: Props) {
   const setNodePosition = useGraphStore((s) => s.setNodePosition);
   const moveNodes = useGraphStore((s) => s.moveNodes);
@@ -62,11 +64,31 @@ export function NodeCard({
 
   const didDrag = useRef(false);
 
+  // Long-press to peek — fires after 500ms hold without movement
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressActive = useRef(false);
+
+  const startLongPress = useCallback(() => {
+    longPressActive.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressActive.current = true;
+      onPeek(node.id);
+    }, 500);
+  }, [node.id, onPeek]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
   const bindDrag = useDrag(
     ({ delta: [dx, dy], first, last, movement: [mx, my], event }) => {
       const el = event?.target as HTMLElement | undefined;
       if (el?.closest("[data-no-drag]")) return;
       if (!first) didDrag.current = Math.hypot(mx, my) > 4;
+      if (!first && didDrag.current) cancelLongPress();
       if (last) setTimeout(() => { didDrag.current = false; }, 0);
       if (first) return;
       const cdx = dx / zoom;
@@ -84,6 +106,7 @@ export function NodeCard({
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (didDrag.current) return;
+    if (longPressActive.current) { longPressActive.current = false; return; }
     if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
     onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
   };
@@ -95,9 +118,8 @@ export function NodeCard({
   if (node.kind === "prompt") {
     const handlePromptClick = (e: React.MouseEvent) => {
       if (didDrag.current) return;
-      // Select the node → ChatCanvas highlights its input/output nodes via edges
+      if (longPressActive.current) { longPressActive.current = false; return; }
       onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
-      // Also toggle expanded text if it's truncated
       if (promptTruncated) setPromptExpanded((v) => !v);
     };
 
@@ -106,6 +128,10 @@ export function NodeCard({
         data-node-card
         {...bindDrag()}
         onClick={handlePromptClick}
+        onPointerDown={startLongPress}
+        onPointerMove={cancelLongPress}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
         style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? PROMPT_CARD_WIDTH }}
         className={`absolute z-10 select-none rounded-xl border transition-all duration-150 cursor-pointer
           ${selected
@@ -137,6 +163,10 @@ export function NodeCard({
       data-node-card
       {...bindDrag()}
       onClick={handleCardClick}
+      onPointerDown={startLongPress}
+      onPointerMove={cancelLongPress}
+      onPointerUp={cancelLongPress}
+      onPointerCancel={cancelLongPress}
       style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? CARD_WIDTH }}
       className={`absolute select-none rounded-2xl border transition-shadow duration-150 ${
         selected

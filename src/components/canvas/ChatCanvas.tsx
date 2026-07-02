@@ -20,6 +20,7 @@ import { FloatingChatBar } from "./FloatingChatBar";
 import { PromptLogPanel } from "./PromptLogPanel";
 import { AskUserHost } from "./AskUserDialog";
 import { CitationsPanel } from "./CitationsPanel";
+import { NodePeek } from "./NodePeek";
 import { computeFramingViewport } from "../../lib/graph/viewportFraming";
 import type { Viewport } from "../../types/graph";
 
@@ -46,6 +47,7 @@ export function ChatCanvas({ chatId }: Props) {
   const [explainNodeId, setExplainNodeId] = useState<string | null>(null);
   const [updateNodeId, setUpdateNodeId] = useState<string | null>(null);
   const [citationsNodeId, setCitationsNodeId] = useState<string | null>(null);
+  const [peekNodeId, setPeekNodeId] = useState<string | null>(null);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [revertConfirmEntryIndex, setRevertConfirmEntryIndex] = useState<number | null>(null);
 
@@ -184,6 +186,7 @@ export function ChatCanvas({ chatId }: Props) {
                 onExplain={setExplainNodeId}
                 onUpdate={setUpdateNodeId}
                 onShowCitations={setCitationsNodeId}
+                onPeek={setPeekNodeId}
                 generating={busyNodeIds.has(node.id) || node.generating}
               />
             </motion.div>
@@ -197,6 +200,11 @@ export function ChatCanvas({ chatId }: Props) {
       <CanvasToolbar
         viewport={chat.viewport}
         onViewportChange={(v) => setViewport(chatId, v)}
+        nodes={nodes}
+        containerSize={containerRef.current ? {
+          width: containerRef.current.getBoundingClientRect().width,
+          height: containerRef.current.getBoundingClientRect().height,
+        } : { width: 800, height: 600 }}
         thinkingAvailable={thinkingHasContent}
         thinkingActive={thinkingActive}
         onToggleThinking={() => {
@@ -236,6 +244,7 @@ export function ChatCanvas({ chatId }: Props) {
           if (selectedIds.length > 0) setSelected(new Set());
         }}
         onCancel={cancelGeneration}
+        onClearSelection={() => { setSelected(new Set()); setHighlightedNodeIds(new Set()); }}
       />
 
       {/* Prompt history panel */}
@@ -259,6 +268,11 @@ export function ChatCanvas({ chatId }: Props) {
       {/* Citations panel — rendered here (outside canvas transform) to avoid stacking context trapping */}
       {citationsNodeId && allNodes[citationsNodeId] && (
         <CitationsPanel node={allNodes[citationsNodeId]} onClose={() => setCitationsNodeId(null)} />
+      )}
+
+      {/* Long-press peek overlay */}
+      {peekNodeId && allNodes[peekNodeId] && (
+        <NodePeek node={allNodes[peekNodeId]} onDismiss={() => setPeekNodeId(null)} />
       )}
 
       {updateNodeId && allNodes[updateNodeId] && (

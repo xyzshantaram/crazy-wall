@@ -1,14 +1,18 @@
 /**
- * Floating toolbar, bottom-right of the canvas.
- * Zoom controls + Thinking trace toggle + Prompt history toggle.
+ * Floating toolbar — zoom controls, fit-all, thinking trace toggle, prompt history.
+ *
+ * On mobile: sits above the chat bar (bottom-[5.5rem]), larger touch targets.
+ * On desktop: bottom-right corner.
  */
 
-import type { Viewport } from "../../types/graph";
+import type { GraphNode, Viewport } from "../../types/graph";
 import { useViewportControls } from "./useViewportControls";
 
 interface Props {
   viewport: Viewport;
   onViewportChange: (v: Viewport) => void;
+  nodes: GraphNode[];
+  containerSize: { width: number; height: number };
   thinkingAvailable: boolean;
   thinkingActive: boolean;
   onToggleThinking: () => void;
@@ -19,10 +23,11 @@ interface Props {
 
 export function CanvasToolbar({
   viewport, onViewportChange,
+  nodes, containerSize,
   thinkingAvailable, thinkingActive, onToggleThinking,
   promptCount, promptsOpen, onTogglePrompts,
 }: Props) {
-  const { zoomIn, zoomOut, resetView } = useViewportControls(viewport, onViewportChange);
+  const { zoomIn, zoomOut, resetView, fitAll } = useViewportControls(viewport, onViewportChange);
 
   return (
     <div
@@ -56,27 +61,36 @@ export function CanvasToolbar({
 
       <div className="w-px h-4 bg-border-soft mx-0.5" />
 
-      {/* Zoom */}
+      {/* Zoom out */}
       <ToolbarButton onClick={zoomOut} title="Zoom out">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
           <path d="M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       </ToolbarButton>
+
+      {/* Zoom % — tap to reset, long label shows current zoom */}
       <button
         onClick={resetView}
-        className="px-2 text-[11.5px] text-ink-faint hover:text-ink transition-colors font-mono tabular-nums min-w-[44px] text-center"
+        title="Reset zoom"
+        className="px-1.5 text-[11px] text-ink-faint hover:text-ink transition-colors font-mono tabular-nums min-w-[38px] text-center"
       >
         {Math.round(viewport.zoom * 100)}%
       </button>
+
+      {/* Zoom in */}
       <ToolbarButton onClick={zoomIn} title="Zoom in">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
           <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       </ToolbarButton>
+
       <div className="w-px h-4 bg-border-soft mx-0.5" />
-      <ToolbarButton onClick={resetView} title="Reset view">
+
+      {/* Fit all — frame every node in view */}
+      <ToolbarButton onClick={() => fitAll(nodes, containerSize)} title="Fit all nodes">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-          <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M2 5V3h2M12 3h2v2M14 11v2h-2M4 13H2v-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="5" y="5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3" />
         </svg>
       </ToolbarButton>
     </div>
@@ -95,7 +109,7 @@ export function ToolbarButton({
     <button
       onClick={onClick}
       title={title}
-      className={`relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+      className={`relative w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg transition-colors ${
         active ? "text-accent bg-accent/10" : "text-ink-dim hover:text-ink hover:bg-white/6"
       }`}
     >

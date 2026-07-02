@@ -20,9 +20,10 @@ interface Props {
   busy: boolean;
   onSubmit: (prompt: string, selectedIds: string[]) => void;
   onCancel: () => void;
+  onClearSelection: () => void;
 }
 
-export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel }: Omit<Props, "chatId"> & { chatId: string }) {
+export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel, onClearSelection }: Omit<Props, "chatId"> & { chatId: string }) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -86,9 +87,18 @@ export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel }: O
               <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.5" />
               <path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            <span className="text-[11px] text-accent-2 font-medium">
+            <span className="text-[11px] text-accent-2 font-medium flex-1">
               {selectedCount} node{selectedCount > 1 ? "s" : ""} selected
             </span>
+            <button
+              onClick={onClearSelection}
+              title="Clear selection"
+              className="w-4 h-4 flex items-center justify-center rounded text-accent-2/60 hover:text-accent-2 transition-colors"
+            >
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
           </div>
         )}
 
