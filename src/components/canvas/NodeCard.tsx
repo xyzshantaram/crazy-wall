@@ -68,17 +68,9 @@ export function NodeCard({
   const lastClickTime = useRef(0);
   const DOUBLE_TAP_MS = 300;
 
-  // Long-press to peek — fires after 500ms hold without movement
+  // Long-press to peek — timer started in useDrag on first event, cancelled on movement
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressActive = useRef(false);
-
-  const startLongPress = useCallback(() => {
-    longPressActive.current = false;
-    longPressTimer.current = setTimeout(() => {
-      longPressActive.current = true;
-      onPeek(node.id);
-    }, 500);
-  }, [node.id, onPeek]);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimer.current) {
@@ -91,10 +83,32 @@ export function NodeCard({
     ({ delta: [dx, dy], first, last, movement: [mx, my], event }) => {
       const el = event?.target as HTMLElement | undefined;
       if (el?.closest("[data-no-drag]")) return;
-      if (!first) didDrag.current = Math.hypot(mx, my) > 4;
-      if (!first && didDrag.current) cancelLongPress();
-      if (last) setTimeout(() => { didDrag.current = false; }, 0);
-      if (first) return;
+
+      if (first) {
+        // Start long-press timer on touch/pointer down
+        longPressActive.current = false;
+        longPressTimer.current = setTimeout(() => {
+          longPressActive.current = true;
+          onPeek(node.id);
+        }, 500);
+        return;
+      }
+
+      // Cancel long-press as soon as meaningful movement detected
+      const moved = Math.hypot(mx, my) > 4;
+      if (moved) {
+        cancelLongPress();
+        didDrag.current = true;
+      }
+
+      if (last) {
+        cancelLongPress();
+        setTimeout(() => { didDrag.current = false; }, 0);
+        return;
+      }
+
+      if (!didDrag.current) return; // haven't crossed drag threshold yet
+
       const cdx = dx / zoom;
       const cdy = dy / zoom;
       if (selected && selectedIds.size > 1) {
@@ -146,10 +160,6 @@ export function NodeCard({
         data-node-card
         {...bindDrag()}
         onClick={handlePromptClick}
-        onPointerDown={startLongPress}
-        onPointerMove={cancelLongPress}
-        onPointerUp={cancelLongPress}
-        onPointerCancel={cancelLongPress}
         style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? PROMPT_CARD_WIDTH }}
         className={`absolute z-10 select-none rounded-xl border transition-all duration-150 cursor-pointer
           ${selected
@@ -181,10 +191,6 @@ export function NodeCard({
       data-node-card
       {...bindDrag()}
       onClick={handleCardClick}
-      onPointerDown={startLongPress}
-      onPointerMove={cancelLongPress}
-      onPointerUp={cancelLongPress}
-      onPointerCancel={cancelLongPress}
       style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? CARD_WIDTH }}
       className={`absolute select-none rounded-2xl border transition-shadow duration-150 ${
         selected

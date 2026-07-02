@@ -4,8 +4,8 @@
  * For OpenRouter the list is grouped into price tiers rendered as <optgroup>s.
  * For DeepSeek / Z.AI it's a flat list.
  *
- * Falls back to the provider's curated suggestedModels while loading or on
- * error.
+ * Optional `providerLabel` renders as a disabled optgroup header at the very
+ * top so the provider is visible without needing a separate UI element.
  */
 
 import { useEffect, useState } from "react";
@@ -19,9 +19,11 @@ interface Props {
   value: string;
   onChange: (modelId: string) => void;
   className?: string;
+  /** When set, renders as a disabled optgroup header at the top of the list. */
+  providerLabel?: string;
 }
 
-export function ModelPicker({ providerId, apiKey, value, onChange, className }: Props) {
+export function ModelPicker({ providerId, apiKey, value, onChange, className, providerLabel }: Props) {
   const [result, setResult] = useState<FetchModelsResult>(
     PROVIDERS[providerId].suggestedModels.map((id) => ({ id, label: id })),
   );
@@ -38,34 +40,35 @@ export function ModelPicker({ providerId, apiKey, value, onChange, className }: 
 
   const cls = className ?? "w-full bg-surface-3 border border-border-soft rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink-dim focus:outline-none";
 
-  // Check whether the current value appears anywhere in the result
-  const allOptions = isGrouped(result)
-    ? result.flatMap((g) => g.models)
-    : result;
+  const allOptions = isGrouped(result) ? result.flatMap((g) => g.models) : result;
   const hasValue = allOptions.some((o) => o.id === value);
+
+  const modelOptions = isGrouped(result) ? (
+    result.map((group) => (
+      <optgroup key={group.label} label={group.label}>
+        {group.models.map((m) => (
+          <option key={m.id} value={m.id}>{m.label !== m.id ? m.label : m.id}</option>
+        ))}
+      </optgroup>
+    ))
+  ) : (
+    result.map((m) => (
+      <option key={m.id} value={m.id}>{m.label !== m.id ? `${m.label} (${m.id})` : m.id}</option>
+    ))
+  );
 
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={cls}>
-      {/* Always keep the currently selected value selectable */}
       {!hasValue && value && <option value={value}>{value}</option>}
 
-      {isGrouped(result) ? (
-        result.map((group) => (
-          <optgroup key={group.label} label={group.label}>
-            {group.models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label !== m.id ? `${m.label}` : m.id}
-              </option>
-            ))}
+      {providerLabel ? (
+        <>
+          <optgroup label={providerLabel}>
+            {/* empty — just shows provider name as a section header */}
           </optgroup>
-        ))
-      ) : (
-        result.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label !== m.id ? `${m.label} (${m.id})` : m.id}
-          </option>
-        ))
-      )}
+          {modelOptions}
+        </>
+      ) : modelOptions}
 
       {loading && <option disabled>Loading…</option>}
     </select>

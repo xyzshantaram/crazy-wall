@@ -233,7 +233,8 @@ export function ChatCanvas({ chatId }: Props) {
       {selectedPromptEntry && (
         <div
           data-no-pan
-          className="absolute bottom-36 left-1/2 -translate-x-1/2 z-20 animate-fade-in-up"
+          className="absolute bottom-36 sm:bottom-36 left-1/2 -translate-x-1/2 z-20 animate-fade-in-up"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 9rem)" }}
         >
           <button
             onClick={() => setRevertConfirmEntryIndex(selectedPromptEntry.index)}
@@ -248,7 +249,7 @@ export function ChatCanvas({ chatId }: Props) {
         </div>
       )}
 
-      {/* Floating chat bar */}
+      {/* Floating chat bar — on mobile also contains the canvas toolbar controls */}
       <FloatingChatBar
         chatId={chatId}
         selectedNodeIds={selected}
@@ -259,6 +260,19 @@ export function ChatCanvas({ chatId }: Props) {
         }}
         onCancel={cancelGeneration}
         onClearSelection={() => { setSelected(new Set()); setHighlightedNodeIds(new Set()); }}
+        viewport={chat.viewport}
+        onViewportChange={(v) => setViewport(chatId, v)}
+        nodes={nodes}
+        containerSize={containerRef.current ? {
+          width: containerRef.current.getBoundingClientRect().width,
+          height: containerRef.current.getBoundingClientRect().height,
+        } : { width: 800, height: 600 }}
+        thinkingAvailable={thinkingHasContent}
+        thinkingActive={thinkingActive}
+        onToggleThinking={() => { if (thinkingDismissed) reopenThinking(chatId); }}
+        promptCount={chat?.promptLog?.length ?? 0}
+        promptsOpen={promptsOpen}
+        onTogglePrompts={() => setPromptsOpen((o) => !o)}
       />
 
       {/* Prompt history panel */}

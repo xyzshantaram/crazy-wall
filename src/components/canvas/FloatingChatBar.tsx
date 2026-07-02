@@ -1,18 +1,21 @@
 /**
- * FloatingChatBar — always-visible bottom-center prompt bar on the canvas.
+ * FloatingChatBar — bottom prompt bar on the canvas.
  *
- * Behaviour:
- *  - When nothing is selected: sends a free follow-up to the current chat.
- *  - When nodes are selected: pre-fills context label, sends a targeted instruction.
- *  - While busy: shows a Cancel button instead of Submit.
- *  - On submit: clears the input and fires the appropriate action.
+ * Desktop: floating card centered above the bottom edge.
+ * Mobile: full-width flush bar at the very bottom, with toolbar controls
+ *         (zoom, fit-all, thinking, prompts) embedded in the footer row
+ *         so there's no separate floating toolbar eating canvas space.
  */
 
 import { useRef, useState } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { PROVIDERS, type ProviderId } from "../../lib/providers/registry";
+import { useGraphStore } from "../../stores/graphStore";
+import { PROVIDERS } from "../../lib/providers/registry";
+import type { ProviderId } from "../../lib/providers/registry";
 import { ToolsDropdown } from "./ToolsDropdown";
 import { ModelPicker } from "../settings/ModelPicker";
+import { useViewportControls } from "./useViewportControls";
+import type { GraphNode, Viewport } from "../../types/graph";
 
 interface Props {
   chatId: string;
@@ -21,33 +24,54 @@ interface Props {
   onSubmit: (prompt: string, selectedIds: string[]) => void;
   onCancel: () => void;
   onClearSelection: () => void;
+  viewport: Viewport;
+  onViewportChange: (v: Viewport) => void;
+  nodes: GraphNode[];
+  containerSize: { width: number; height: number };
+  thinkingAvailable: boolean;
+  thinkingActive: boolean;
+  onToggleThinking: () => void;
+  promptCount: number;
+  promptsOpen: boolean;
+  onTogglePrompts: () => void;
 }
 
-export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel, onClearSelection }: Omit<Props, "chatId"> & { chatId: string }) {
+export function FloatingChatBar({
+  chatId,
+  selectedNodeIds, busy, onSubmit, onCancel, onClearSelection,
+  viewport, onViewportChange, nodes, containerSize,
+  thinkingAvailable, thinkingActive, onToggleThinking,
+  promptCount, promptsOpen, onTogglePrompts,
+}: Props) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Active provider/model from settings — used for the *next* submission
-  const activeProvider = useSettingsStore((s) => s.activeProvider);
-  const setActiveProvider = useSettingsStore((s) => s.setActiveProvider);
+  // Chat's committed provider — fixed, can't be changed mid-chat
+  const chat = useGraphStore((s) => s.chats[chatId]);
+  const setChatProviderModel = useGraphStore((s) => s.setChatProviderModel);
+  const chatProvider = (chat?.provider ?? "openrouter") as ProviderId;
+  const chatModel = chat?.model ?? "";
+  const providerLabel = PROVIDERS[chatProvider]?.label ?? chatProvider;
+
+  // Keep settingsStore in sync so useGraphActions picks up the model
   const apiKeys = useSettingsStore((s) => s.apiKeys);
-  const models = useSettingsStore((s) => s.models);
   const setModel = useSettingsStore((s) => s.setModel);
+
+  const handleModelChange = (newModel: string) => {
+    setChatProviderModel(chatId, chatProvider, newModel);
+    setModel(chatProvider, newModel);
+  };
+
+  const { zoomIn, zoomOut, resetView, fitAll } = useViewportControls(viewport, onViewportChange);
 
   const selectedCount = selectedNodeIds.size;
   const placeholder = selectedCount > 0
     ? `What should I do with ${selectedCount} selected node${selectedCount > 1 ? "s" : ""}?`
-    : "Add something, go deeper, ask a follow-up…";
+    : "Add something, go deeper…";
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-    if (e.key === "Escape") {
-      setValue("");
-      textareaRef.current?.blur();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+    if (e.key === "Escape") { setValue(""); textareaRef.current?.blur(); }
   };
 
   const handleSubmit = () => {
@@ -65,24 +89,43 @@ export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel, onC
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
   };
 
-  // Ghost select style — blends into the footer bar
-  const ghostSelect = "bg-transparent border-none outline-none text-[10.5px] text-ink-faint hover:text-ink-dim cursor-pointer transition-colors min-w-0 max-w-[120px]";
+  const ghostSelect = "bg-transparent border-none outline-none text-[10.5px] text-ink-faint hover:text-ink-dim cursor-pointer transition-colors min-w-0";
+
+  // Compact icon button used inside footer on mobile
+  const footerIconBtn = (onClick: () => void, title: string, active: boolean, children: React.ReactNode) => (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors flex-shrink-0 ${
+        active ? "text-accent bg-accent/10" : "text-ink-faint hover:text-ink hover:bg-white/6"
+      }`}
+    >
+      {children}
+    </button>
+  );
 
   return (
     <div
       data-no-pan
-      className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-[624px] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-32px)]"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      className={[
+        // Mobile: full-width flush to bottom
+        "absolute bottom-0 left-0 right-0 z-20",
+        // Desktop: floating centered card
+        "sm:bottom-4 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto sm:w-[624px] sm:max-w-[calc(100vw-32px)]",
+      ].join(" ")}
     >
       {/* No overflow-hidden — traps ToolsDropdown fixed popover on WebKit */}
-      <div className={`
-        flex flex-col bg-surface/95 backdrop-blur-md border rounded-2xl shadow-panel
-        transition-colors duration-150
-        ${busy ? "border-accent/40" : "border-border-soft hover:border-border focus-within:border-accent/50"}
-      `}>
+      <div className={[
+        "flex flex-col bg-surface/97 backdrop-blur-md border-t border-border-soft",
+        "sm:border sm:rounded-2xl sm:shadow-panel",
+        "transition-colors duration-150",
+        busy ? "border-accent/40" : "focus-within:border-accent/50",
+      ].join(" ")}
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
         {/* Context label when nodes are selected */}
         {selectedCount > 0 && (
-          <div className="flex items-center gap-1.5 px-3.5 pt-2.5 pb-0">
+          <div className="flex items-center gap-1.5 px-3 pt-2 pb-0 sm:px-3.5 sm:pt-2.5">
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="text-accent-2 flex-shrink-0">
               <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.5" />
               <path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
@@ -103,7 +146,7 @@ export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel, onC
         )}
 
         {/* Input row */}
-        <div className="flex items-end gap-2 px-3.5 pt-3 pb-2">
+        <div className="flex items-end gap-2 px-3 pt-2.5 pb-2 sm:px-3.5 sm:pt-3">
           <textarea
             ref={textareaRef}
             value={value}
@@ -140,45 +183,93 @@ export function FloatingChatBar({ selectedNodeIds, busy, onSubmit, onCancel, onC
           )}
         </div>
 
-        {/* Footer: tools · provider · model · generating */}
-        <div className="px-3.5 pt-1.5 pb-2.5 flex items-center gap-2 border-t border-border-soft/40 min-w-0">
-          <div className="flex-shrink-0" data-no-drag>
-            <ToolsDropdown />
-          </div>
-          <div className="w-px h-3 bg-border-soft flex-shrink-0" />
-
-          {/* Provider selector */}
-          <select
-            value={activeProvider}
-            onChange={(e) => setActiveProvider(e.target.value as ProviderId)}
-            disabled={busy}
-            className={`flex-shrink-0 ${ghostSelect}`}
-            title="Provider"
-          >
-            {Object.values(PROVIDERS).map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
-
-          <div className="w-px h-3 bg-border-soft flex-shrink-0" />
-
-          {/* Model selector */}
-          <div className="flex-1 min-w-0">
-            <ModelPicker
-              providerId={activeProvider}
-              apiKey={apiKeys[activeProvider]}
-              value={models[activeProvider]}
-              onChange={(m) => setModel(activeProvider, m)}
-              className={`w-full ${ghostSelect} max-w-none`}
-            />
+        {/* Footer: tools + model on left, zoom controls on right (mobile inline) */}
+        <div className="px-3 pb-2 flex items-center gap-1.5 border-t border-border-soft/40 pt-1.5 sm:px-3.5 sm:pb-2.5 sm:gap-2 min-w-0">
+          {/* Left: tools + model picker */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 sm:gap-2" data-no-drag>
+            <div className="flex-shrink-0">
+              <ToolsDropdown />
+            </div>
+            <div className="w-px h-3 bg-border-soft flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <ModelPicker
+                providerId={chatProvider}
+                apiKey={apiKeys[chatProvider]}
+                value={chatModel}
+                onChange={handleModelChange}
+                className={`w-full ${ghostSelect} max-w-none`}
+                providerLabel={providerLabel}
+              />
+            </div>
           </div>
 
           {busy && (
-            <span className="text-[10.5px] text-accent-2 flex items-center gap-1 flex-shrink-0 ml-1">
+            <span className="text-[10.5px] text-accent-2 flex items-center gap-1 flex-shrink-0 ml-1 sm:ml-1">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-2 animate-pulse" />
-              Generating…
+              <span className="hidden sm:inline">Generating…</span>
             </span>
           )}
+
+          {/* Right: zoom + canvas controls — only shown on mobile (desktop has standalone toolbar) */}
+          <div className="flex items-center gap-0 flex-shrink-0 sm:hidden ml-auto">
+            <div className="w-px h-3 bg-border-soft mr-1.5" />
+
+            {/* Thinking trace */}
+            {thinkingAvailable && footerIconBtn(onToggleThinking, "Reasoning", thinkingActive,
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M8 5v3.5l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+
+            {/* Prompt history */}
+            {footerIconBtn(onTogglePrompts, "History", promptsOpen,
+              <span className="relative">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                {promptCount > 0 && !promptsOpen && (
+                  <span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-accent text-white text-[7px] flex items-center justify-center font-bold leading-none">
+                    {promptCount > 9 ? "9+" : promptCount}
+                  </span>
+                )}
+              </span>
+            )}
+
+            <div className="w-px h-3 bg-border-soft mx-1" />
+
+            {/* Zoom out */}
+            {footerIconBtn(zoomOut, "Zoom out", false,
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            )}
+
+            {/* Zoom % / reset */}
+            <button
+              onClick={resetView}
+              className="px-1 text-[10px] text-ink-faint hover:text-ink font-mono tabular-nums min-w-[32px] text-center"
+            >
+              {Math.round(viewport.zoom * 100)}%
+            </button>
+
+            {/* Zoom in */}
+            {footerIconBtn(zoomIn, "Zoom in", false,
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            )}
+
+            <div className="w-px h-3 bg-border-soft mx-1" />
+
+            {/* Fit all */}
+            {footerIconBtn(() => fitAll(nodes, containerSize), "Fit all", false,
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 5V3h2M12 3h2v2M14 11v2h-2M4 13H2v-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                <rect x="5" y="5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            )}
+          </div>
         </div>
       </div>
     </div>
