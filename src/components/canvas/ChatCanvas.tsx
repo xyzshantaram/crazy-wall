@@ -19,6 +19,7 @@ import { ThinkingPanel } from "./ThinkingPanel";
 import { FloatingChatBar } from "./FloatingChatBar";
 import { PromptLogPanel } from "./PromptLogPanel";
 import { AskUserHost } from "./AskUserDialog";
+import { CitationsPanel } from "./CitationsPanel";
 import { computeFramingViewport } from "../../lib/graph/viewportFraming";
 import type { Viewport } from "../../types/graph";
 
@@ -33,6 +34,7 @@ export function ChatCanvas({ chatId }: Props) {
   const markChatStarted = useGraphStore((s) => s.markChatStarted);
   const setViewport = useGraphStore((s) => s.setViewport);
   const createChat = useGraphStore((s) => s.createChat);
+  const revertToPrompt = useGraphStore((s) => s.revertToPrompt);
 
   const thinkingState = useThinkingStore((s) => s.chats[chatId]);
   const reopenThinking = useThinkingStore((s) => s.reopen);
@@ -43,7 +45,9 @@ export function ChatCanvas({ chatId }: Props) {
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
   const [explainNodeId, setExplainNodeId] = useState<string | null>(null);
   const [updateNodeId, setUpdateNodeId] = useState<string | null>(null);
+  const [citationsNodeId, setCitationsNodeId] = useState<string | null>(null);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const [revertConfirmEntryIndex, setRevertConfirmEntryIndex] = useState<number | null>(null);
 
   const handleNodesCreated = useCallback(
     (targetChatId: string, nodeIds: string[]) => {
@@ -73,16 +77,32 @@ export function ChatCanvas({ chatId }: Props) {
   );
 
   const handleSelect = useCallback((nodeId: string, _additive: boolean) => {
-    // All clicks are additive — toggle the node in/out of the selection set.
-    // Background click (handleBackgroundClick) is the only way to clear all.
     setHighlightedNodeIds(new Set());
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(nodeId)) next.delete(nodeId);
-      else next.add(nodeId);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+        return next;
+      }
+      next.add(nodeId);
+
+      // If the newly selected node is a prompt bubble, highlight its
+      // input (→ prompt) and output (prompt →) nodes via edges.
+      const node = useGraphStore.getState().nodes[nodeId];
+      if (node?.kind === "prompt") {
+        const chatEdges = Object.values(useGraphStore.getState().edges).filter((e) => e.chatId === chatId);
+        const connected = new Set<string>();
+        for (const e of chatEdges) {
+          if (e.from === nodeId) connected.add(e.to);
+          if (e.to === nodeId) connected.add(e.from);
+        }
+        connected.delete(nodeId);
+        setHighlightedNodeIds(connected);
+      }
+
       return next;
     });
-  }, []);
+  }, [chatId]);
 
   const handleBackgroundClick = useCallback(() => {
     setSelected(new Set());
@@ -111,15 +131,24 @@ export function ChatCanvas({ chatId }: Props) {
 
   const handleHighlight = useCallback((nodeIds: string[]) => {
     setHighlightedNodeIds(new Set(nodeIds));
-    // Auto-clear after 3 seconds
     setTimeout(() => setHighlightedNodeIds(new Set()), 3000);
   }, []);
 
-  // Thinking panel: show whenever busy OR there's trace content (even if model
-  // doesn't return reasoning tokens, we show a spinner while generation runs).
-  const thinkingHasContent = Boolean(thinkingState?.text || thinkingState?.active || busyChat);
+  const thinkingHasContent = Boolean((thinkingState?.events?.length ?? 0) > 0 || thinkingState?.active || busyChat);
   const thinkingDismissed = thinkingState?.dismissed ?? false;
   const thinkingActive = !thinkingDismissed && thinkingHasContent;
+
+  // Find the prompt log entry for a selected prompt node (for revert button)
+  const selectedPromptEntry = useMemo(() => {
+    if (selected.size !== 1) return null;
+    const [id] = selected;
+    const node = allNodes[id];
+    if (!node || node.kind !== "prompt") return null;
+    const log = chat?.promptLog ?? [];
+    const idx = log.findIndex((e) => e.canvasNodeId === id);
+    if (idx === -1) return null;
+    return { entry: log[idx], index: idx };
+  }, [selected, allNodes, chat?.promptLog]);
 
   if (!chat) return null;
 
@@ -154,6 +183,7 @@ export function ChatCanvas({ chatId }: Props) {
                 onFork={handleFork}
                 onExplain={setExplainNodeId}
                 onUpdate={setUpdateNodeId}
+                onShowCitations={setCitationsNodeId}
                 generating={busyNodeIds.has(node.id) || node.generating}
               />
             </motion.div>
@@ -176,6 +206,25 @@ export function ChatCanvas({ chatId }: Props) {
         promptsOpen={promptsOpen}
         onTogglePrompts={() => setPromptsOpen((o) => !o)}
       />
+
+      {/* Revert-to-prompt floating button — shown when a prompt bubble is selected */}
+      {selectedPromptEntry && (
+        <div
+          data-no-pan
+          className="absolute bottom-36 left-1/2 -translate-x-1/2 z-20 animate-fade-in-up"
+        >
+          <button
+            onClick={() => setRevertConfirmEntryIndex(selectedPromptEntry.index)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-warn/15 border border-warn/40 text-warn text-[12.5px] font-medium hover:bg-warn/25 transition-colors shadow-panel"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8a6 6 0 1 0 1.5-3.9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M2 3.5V8h4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Revert wall to this prompt
+          </button>
+        </div>
+      )}
 
       {/* Floating chat bar */}
       <FloatingChatBar
@@ -207,6 +256,11 @@ export function ChatCanvas({ chatId }: Props) {
         <ExplainPanel node={allNodes[explainNodeId]} onClose={() => setExplainNodeId(null)} />
       )}
 
+      {/* Citations panel — rendered here (outside canvas transform) to avoid stacking context trapping */}
+      {citationsNodeId && allNodes[citationsNodeId] && (
+        <CitationsPanel node={allNodes[citationsNodeId]} onClose={() => setCitationsNodeId(null)} />
+      )}
+
       {updateNodeId && allNodes[updateNodeId] && (
         <UpdateNodePrompt
           nodeTitle={allNodes[updateNodeId].title}
@@ -215,6 +269,19 @@ export function ChatCanvas({ chatId }: Props) {
             setUpdateNodeId(null);
           }}
           onClose={() => setUpdateNodeId(null)}
+        />
+      )}
+
+      {/* Revert confirmation dialog */}
+      {revertConfirmEntryIndex !== null && (
+        <RevertConfirmDialog
+          onConfirm={() => {
+            revertToPrompt(chatId, revertConfirmEntryIndex);
+            setRevertConfirmEntryIndex(null);
+            setSelected(new Set());
+            setHighlightedNodeIds(new Set());
+          }}
+          onClose={() => setRevertConfirmEntryIndex(null)}
         />
       )}
 
@@ -233,10 +300,46 @@ export function ChatCanvas({ chatId }: Props) {
   );
 }
 
+function RevertConfirmDialog({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-[380px] max-w-[calc(100vw-32px)] bg-surface border border-border rounded-2xl shadow-panel p-5 animate-fade-in-up"
+      >
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-xl bg-warn/15 flex items-center justify-center flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8a6 6 0 1 0 1.5-3.9" stroke="var(--color-warn)" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M2 3.5V8h4.5" stroke="var(--color-warn)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h3 className="text-[14px] font-semibold text-ink">Revert wall?</h3>
+        </div>
+        <p className="text-[13px] text-ink-dim leading-relaxed mb-5">
+          All nodes and edges created <em>after</em> this prompt will be permanently deleted. This cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-lg text-[13px] text-ink-dim hover:bg-white/6 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-warn/20 text-warn border border-warn/40 hover:bg-warn/30 transition-colors"
+          >
+            Yes, revert
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UpdateNodePrompt({
-  nodeTitle,
-  onSubmit,
-  onClose,
+  nodeTitle, onSubmit, onClose,
 }: {
   nodeTitle: string;
   onSubmit: (instruction: string) => void;
@@ -265,9 +368,7 @@ function UpdateNodePrompt({
           className="w-full resize-none bg-surface-2 border border-border-soft rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent/50"
         />
         <div className="flex justify-end gap-2 mt-3">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-[12.5px] text-ink-dim hover:bg-white/6 transition-colors">
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-[12.5px] text-ink-dim hover:bg-white/6 transition-colors">Cancel</button>
           <button
             onClick={() => value.trim() && onSubmit(value.trim())}
             className="px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-accent text-white hover:bg-accent/90 transition-colors"

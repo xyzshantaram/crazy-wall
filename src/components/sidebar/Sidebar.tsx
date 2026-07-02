@@ -149,8 +149,8 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings, onShare, onReceiv
                   }}
                   className={`w-6 h-6 flex items-center justify-center rounded-md transition-all
                     ${isMenuOpen
-                      ? "text-ink bg-white/10 opacity-100"
-                      : "text-ink-faint opacity-0 group-hover:opacity-100 hover:text-ink hover:bg-white/6"}`}
+                      ? "text-ink bg-white/10"
+                      : "text-ink-faint hover:text-ink hover:bg-white/6"}`}
                 >
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                     <circle cx="8" cy="3" r="1.4" fill="currentColor"/>

@@ -10,10 +10,13 @@ import type { GraphNode } from "../../types/graph";
 import { NodeContentRenderer } from "../widgets/NodeContentRenderer";
 import { useGraphStore } from "../../stores/graphStore";
 import { toast } from "../../stores/toastStore";
-import { CitationsPanel } from "./CitationsPanel";
 
 const CARD_WIDTH = 300;
 const PROMPT_CARD_WIDTH = 420;
+
+// Content area is capped at this height and scrolls beyond.
+// The layout algo uses the same value so placement matches rendered reality.
+export const CONTENT_MAX_HEIGHT = 400;
 
 interface Props {
   node: GraphNode;
@@ -26,10 +29,15 @@ interface Props {
   onFork: (nodeId: string) => void;
   onExplain: (nodeId: string) => void;
   onUpdate: (nodeId: string) => void;
+  /** Lifted out of NodeCard so CitationsPanel renders outside the canvas transform stacking context. */
+  onShowCitations: (nodeId: string) => void;
   generating?: boolean;
 }
 
-export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSelect, onExpand, onFork, onExplain, onUpdate, generating }: Props) {
+export function NodeCard({
+  node, selected, highlighted, zoom, selectedIds,
+  onSelect, onExpand, onFork, onExplain, onUpdate, onShowCitations, generating,
+}: Props) {
   const setNodePosition = useGraphStore((s) => s.setNodePosition);
   const moveNodes = useGraphStore((s) => s.moveNodes);
   const toggleCollapsed = useGraphStore((s) => s.toggleCollapsed);
@@ -38,13 +46,10 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
   const duplicateNode = useGraphStore((s) => s.duplicateNode);
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [showCitations, setShowCitations] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [promptTruncated, setPromptTruncated] = useState(false);
   const promptTextRef = useRef<HTMLParagraphElement>(null);
 
-  // Detect whether the collapsed prompt text overflows its container.
-  // Uses ResizeObserver so it re-checks if the card is resized/zoomed.
   useEffect(() => {
     const el = promptTextRef.current;
     if (!el) return;
@@ -55,7 +60,6 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
     return () => ro.disconnect();
   }, []);
 
-  // Track drag state in a ref to avoid re-renders on every drag frame.
   const didDrag = useRef(false);
 
   const bindDrag = useDrag(
@@ -67,16 +71,12 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
       if (first) return;
       const cdx = dx / zoom;
       const cdy = dy / zoom;
-      // If this node is part of a multi-selection, move all selected nodes together.
       if (selected && selectedIds.size > 1) {
         const deltas: Record<string, { dx: number; dy: number }> = {};
         selectedIds.forEach((id) => { deltas[id] = { dx: cdx, dy: cdy }; });
         moveNodes(deltas);
       } else {
-        setNodePosition(node.id, {
-          x: node.position.x + cdx,
-          y: node.position.y + cdy,
-        });
+        setNodePosition(node.id, { x: node.position.x + cdx, y: node.position.y + cdy });
       }
     },
     { threshold: 4, pointer: { capture: true } },
@@ -89,69 +89,69 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
   };
 
   const kindColor = node.kind === "root" ? "bg-accent" : node.kind === "leaf" ? "bg-ink-faint" : node.kind === "prompt" ? "bg-warn" : "bg-accent-2";
-  const kindRing = node.kind === "root" ? "border-accent" : node.kind === "leaf" ? "border-ink-faint" : node.kind === "prompt" ? "border-warn" : "border-accent-2";
+  const kindRing  = node.kind === "root" ? "border-accent" : node.kind === "leaf" ? "border-ink-faint" : node.kind === "prompt" ? "border-warn" : "border-accent-2";
 
-  // Prompt-bubble nodes get a completely different, minimal appearance.
+  // ── Prompt bubble ──────────────────────────────────────────────────────────
   if (node.kind === "prompt") {
-    const handlePromptClick = (_e: React.MouseEvent) => {
+    const handlePromptClick = (e: React.MouseEvent) => {
       if (didDrag.current) return;
+      // Select the node → ChatCanvas highlights its input/output nodes via edges
+      onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
+      // Also toggle expanded text if it's truncated
       if (promptTruncated) setPromptExpanded((v) => !v);
     };
-    return (
-      <>
-        <div
-          data-node-card
-          {...bindDrag()}
-          onClick={handlePromptClick}
-          style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? PROMPT_CARD_WIDTH }}
-          className={`absolute z-10 select-none rounded-xl border transition-all duration-150
-            ${promptTruncated ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}
-            ${selected ? "border-warn/70 shadow-[0_0_0_1px_var(--color-warn),0_8px_24px_-6px_rgba(245,185,90,0.3)]" : "border-warn/20 bg-warn/5 shadow-none hover:border-warn/40"}
-            ${highlighted ? "ring-2 ring-warn/50 ring-offset-1 ring-offset-void" : ""}`}
-        >
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-warn/70 flex-shrink-0 shrink-0">
-              <path d="M8 2C4.69 2 2 4.36 2 7.25c0 1.7.85 3.2 2.18 4.17L3.5 14l2.7-1.25C6.74 12.9 7.36 13 8 13c3.31 0 6-2.36 6-5.75S11.31 2 8 2z" fill="currentColor" fillOpacity="0.8"/>
-            </svg>
-            {promptExpanded ? (
-              <p className="text-[15px] text-ink-dim leading-snug flex-1 min-w-0 break-words whitespace-pre-wrap">{node.summary ?? node.title}</p>
-            ) : (
-              <p ref={promptTextRef} className="text-[15px] font-semibold text-ink-dim leading-none flex-1 min-w-0 truncate">
-                {node.summary ?? node.title}
-              </p>
-            )}
-          </div>
-        </div>
-        {showCitations && <CitationsPanel node={node} onClose={() => setShowCitations(false)} />}
-      </>
-    );
-  }
 
-  return (
-    <>
+    return (
       <div
         data-node-card
         {...bindDrag()}
-        onClick={handleCardClick}
-        style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? CARD_WIDTH }}
-        className={`absolute select-none rounded-2xl border transition-shadow duration-150 ${
-          selected
-            ? "border-accent shadow-[var(--shadow-node-selected)]"
-            : highlighted
-            ? "border-warn/60 shadow-[0_0_0_2px_rgba(245,185,90,0.25),var(--shadow-node)]"
-            : "border-border shadow-[var(--shadow-node)]"
-        } bg-surface backdrop-blur-sm cursor-grab active:cursor-grabbing`}
+        onClick={handlePromptClick}
+        style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? PROMPT_CARD_WIDTH }}
+        className={`absolute z-10 select-none rounded-xl border transition-all duration-150 cursor-pointer
+          ${selected
+            ? "border-warn/70 shadow-[0_0_0_1px_var(--color-warn),0_8px_24px_-6px_rgba(245,185,90,0.3)]"
+            : "border-warn/20 bg-warn/5 shadow-none hover:border-warn/40"}
+          ${highlighted ? "ring-2 ring-warn/50 ring-offset-1 ring-offset-void" : ""}`}
       >
+        <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-warn/70 flex-shrink-0">
+            <path d="M8 2C4.69 2 2 4.36 2 7.25c0 1.7.85 3.2 2.18 4.17L3.5 14l2.7-1.25C6.74 12.9 7.36 13 8 13c3.31 0 6-2.36 6-5.75S11.31 2 8 2z" fill="currentColor" fillOpacity="0.8"/>
+          </svg>
+          {promptExpanded ? (
+            <p className="text-[15px] text-ink-dim leading-snug flex-1 min-w-0 break-words whitespace-pre-wrap">
+              {node.summary ?? node.title}
+            </p>
+          ) : (
+            <p ref={promptTextRef} className="text-[15px] font-semibold text-ink-dim leading-none flex-1 min-w-0 truncate">
+              {node.summary ?? node.title}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Regular node ───────────────────────────────────────────────────────────
+  return (
+    <div
+      data-node-card
+      {...bindDrag()}
+      onClick={handleCardClick}
+      style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? CARD_WIDTH }}
+      className={`absolute select-none rounded-2xl border transition-shadow duration-150 ${
+        selected
+          ? "border-accent shadow-[var(--shadow-node-selected)]"
+          : highlighted
+          ? "border-warn/60 shadow-[0_0_0_2px_rgba(245,185,90,0.25),var(--shadow-node)]"
+          : "border-border shadow-[var(--shadow-node)]"
+      } bg-surface backdrop-blur-sm cursor-grab active:cursor-grabbing`}
+    >
       <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-border-soft">
-        {/* Selection checkbox — shows as kind-dot when unchecked, fills on select */}
         <button
           data-no-drag
           onClick={(e) => { e.stopPropagation(); onSelect(node.id, true); }}
           className={`group/cb flex-shrink-0 w-3.5 h-3.5 rounded-full border transition-all duration-100 flex items-center justify-center
-            ${selected
-              ? `${kindColor} border-transparent`
-              : `bg-transparent ${kindRing} opacity-60 hover:opacity-100`
-            }`}
+            ${selected ? `${kindColor} border-transparent` : `bg-transparent ${kindRing} opacity-60 hover:opacity-100`}`}
           title={selected ? "Deselect" : "Select"}
         >
           {selected && (
@@ -187,19 +187,9 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
                 { label: node.pinned ? "Unpin" : "Pin", action: () => togglePinned(node.id) },
                 { label: node.collapsed ? "Expand card" : "Collapse card", action: () => toggleCollapsed(node.id) },
                 { label: "Explain", action: () => onExplain(node.id) },
-                {
-                  label: `Sources${node.citations?.length ? ` (${node.citations.length})` : ""}`,
-                  action: () => setShowCitations(true),
-                },
+                { label: `Sources${node.citations?.length ? ` (${node.citations.length})` : ""}`, action: () => onShowCitations(node.id) },
                 { label: "Duplicate", action: () => duplicateNode(node.id) },
-                {
-                  label: "Delete",
-                  danger: true,
-                  action: () => {
-                    deleteNode(node.id);
-                    toast.push("Node deleted", "default");
-                  },
-                },
+                { label: "Delete", danger: true, action: () => { deleteNode(node.id); toast.push("Node deleted", "default"); } },
               ]}
             />
           )}
@@ -216,28 +206,22 @@ export function NodeCard({ node, selected, highlighted, zoom, selectedIds, onSel
               <div className="h-3 w-2/3 rounded skeleton-shimmer" />
             </div>
           ) : (
-            <NodeContentRenderer
-              nodeId={node.id}
-              content={node.content}
-              title={node.title}
-              onToast={(m, v) => toast.push(m, v as never)}
-            />
+            <div className="overflow-y-auto scroll-thin" style={{ maxHeight: CONTENT_MAX_HEIGHT }}>
+              <NodeContentRenderer
+                nodeId={node.id}
+                content={node.content}
+                title={node.title}
+                onToast={(m, v) => toast.push(m, v as never)}
+              />
+            </div>
           )}
         </div>
       )}
     </div>
-    {showCitations && <CitationsPanel node={node} onClose={() => setShowCitations(false)} />}
-    </>
   );
 }
 
-function NodeMenu({
-  items,
-  onClose,
-}: {
-  items: { label: string; action: () => void; danger?: boolean }[];
-  onClose: () => void;
-}) {
+function NodeMenu({ items, onClose }: { items: { label: string; action: () => void; danger?: boolean }[]; onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -245,10 +229,7 @@ function NodeMenu({
         {items.map((item, i) => (
           <button
             key={i}
-            onClick={() => {
-              item.action();
-              onClose();
-            }}
+            onClick={() => { item.action(); onClose(); }}
             className={`w-full text-left px-3 py-1.5 text-[12.5px] transition-colors ${
               item.danger ? "text-bad hover:bg-bad/10" : "text-ink-dim hover:bg-white/6 hover:text-ink"
             }`}

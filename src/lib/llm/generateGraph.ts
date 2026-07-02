@@ -81,8 +81,7 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       });
 
       if (result.reasoning) {
-        const cur = useThinkingStore.getState().chats[opts.chatId];
-        thinking.append(opts.chatId, (cur?.text ? "\n\n" : "") + result.reasoning);
+        useThinkingStore.getState().appendReasoning(opts.chatId, result.reasoning);
       }
 
       if (result.toolCalls.length === 0) {
@@ -99,10 +98,28 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       for (const call of result.toolCalls) {
         const tool = toolMap.get(call.function.name);
         let output: string;
+
+        // Pretty-print args for the trace (truncate large values)
+        let argsPreview = "";
+        try {
+          const parsed = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+          const entries = Object.entries(parsed).map(([k, v]) => {
+            const s = typeof v === "string" ? v : JSON.stringify(v);
+            return `${k}: ${s.length > 60 ? s.slice(0, 57) + "…" : s}`;
+          });
+          argsPreview = entries.join(", ");
+        } catch { /* ignore */ }
+
+        // Push a tool_call event before executing
+        useThinkingStore.getState().pushEvent(opts.chatId, {
+          type: "tool_call",
+          toolName: call.function.name,
+          content: argsPreview,
+        });
+
         if (!tool) {
           output = `Unknown tool "${call.function.name}"`;
         } else {
-          opts.onProgress?.(`Looking things up (${tool.name})…`);
           let args: Record<string, unknown> = {};
           try {
             args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
@@ -113,6 +130,14 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
             output = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
           }
         }
+
+        // Push a tool_result event after execution
+        useThinkingStore.getState().pushEvent(opts.chatId, {
+          type: "tool_result",
+          toolName: call.function.name,
+          content: output.length > 400 ? output.slice(0, 397) + "…" : output,
+        });
+
         messages.push({ role: "tool", tool_call_id: call.id, content: output });
       }
     }
@@ -129,8 +154,7 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       signal: opts.signal,
     });
     if (finalResult.reasoning) {
-      const cur = useThinkingStore.getState().chats[opts.chatId];
-      thinking.append(opts.chatId, (cur?.text ? "\n\n" : "") + finalResult.reasoning);
+      useThinkingStore.getState().appendReasoning(opts.chatId, finalResult.reasoning);
     }
     return parseLlmGraphResponse(finalResult.content);
   } finally {
