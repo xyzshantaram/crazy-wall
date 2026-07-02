@@ -1,15 +1,26 @@
 /**
- * Web search tools for the Canvas LLM agent loop.
+ * Web search + fetch tools for the Canvas LLM agent loop.
  *
  * wikipedia_search  — full-text search via Wikipedia's public REST API (no key).
  * wikipedia_fetch   — fetch a specific Wikipedia article summary + intro (no key).
- * brave_search      — web search via Brave Search API (requires user API key stored
- *                     in settingsStore as braveApiKey; skipped if not configured).
+ * web_fetch         — fetch any URL, extract main content via Readability, convert to Markdown.
+ * tavily_search     — web search via Tavily API (requires user API key).
  *
  * All return plain text so the LLM can cite and embed the content directly.
  */
 
 import type { ToolDefinition } from "./types";
+import { Readability } from "@mozilla/readability";
+import TurndownService from "turndown";
+
+// Shared Turndown instance — convert clean HTML → Markdown.
+const turndown = new TurndownService({
+  headingStyle: "atx",
+  bulletListMarker: "-",
+  codeBlockStyle: "fenced",
+});
+// Remove script/style/nav/header/footer elements before conversion.
+turndown.remove(["script", "style", "nav", "header", "footer", "aside", "figure", "figcaption"]);
 
 // ── Wikipedia ──────────────────────────────────────────────────────────────
 
@@ -105,6 +116,83 @@ export const wikipediaFetchTool: ToolDefinition = {
       return text;
     } catch (err) {
       return `Wikipedia fetch error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+};
+
+// ── Web Fetch ──────────────────────────────────────────────────────────────
+
+const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+const FETCH_CHAR_LIMIT = 8000;
+
+export const webFetchTool: ToolDefinition = {
+  name: "web_fetch",
+  description:
+    "Fetch a web page by URL and return its main content as clean Markdown. Uses Mozilla Readability to extract the article body (strips nav, ads, boilerplate) and converts it to Markdown. Use this to read a specific article, documentation page, paper, or any URL you have. Returns the title, byline, and content. Always cite the URL you fetched.",
+  parameters: {
+    type: "object",
+    properties: {
+      url: {
+        type: "string",
+        description: "The full URL to fetch, e.g. 'https://example.com/article'.",
+      },
+    },
+    required: ["url"],
+  },
+  execute: async (args) => {
+    const url = String(args.url ?? "").trim();
+    if (!url) return "No URL provided.";
+    if (!/^https?:\/\//i.test(url)) return `Invalid URL: "${url}". Must start with http:// or https://.`;
+
+    try {
+      const proxyUrl = `${CORS_PROXY}${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) return `Fetch failed: HTTP ${res.status} for ${url}`;
+
+      const contentType = res.headers.get("content-type") ?? "";
+      const html = await res.text();
+
+      // If the response is already plain text or JSON, return it directly.
+      if (!contentType.includes("html")) {
+        const trimmed = html.slice(0, FETCH_CHAR_LIMIT);
+        return `${trimmed}${html.length > FETCH_CHAR_LIMIT ? "\n\n... (truncated)" : ""}\n\nCITATION_JSON: ${JSON.stringify({ title: url, url })}`;
+      }
+
+      // Parse with DOMParser (browser native) and run Readability on it.
+      const doc = new DOMParser().parseFromString(html, "text/html");
+
+      // Set base URL so relative links resolve correctly.
+      const base = doc.createElement("base");
+      base.href = url;
+      doc.head.appendChild(base);
+
+      const reader = new Readability(doc, { charThreshold: 100 });
+      const article = reader.parse();
+
+      let output: string;
+      if (article?.content) {
+        const md = turndown.turndown(article.content);
+        const title = article.title ?? url;
+        const byline = article.byline ? `*${article.byline}*\n\n` : "";
+        output = `# ${title}\n\n${byline}${md}`;
+      } else {
+        // Readability couldn't extract — fall back to stripping all tags.
+        const text = doc.body?.innerText ?? html.replace(/<[^>]+>/g, " ");
+        output = text.replace(/\s{3,}/g, "\n\n").trim();
+      }
+
+      if (output.length > FETCH_CHAR_LIMIT) {
+        output = output.slice(0, FETCH_CHAR_LIMIT) + "\n\n... (truncated)";
+      }
+
+      const citation = { title: article?.title ?? url, url };
+      output += `\n\nCITATION_JSON: ${JSON.stringify(citation)}`;
+      return output;
+    } catch (err) {
+      if (err instanceof Error && err.name === "TimeoutError") {
+        return `Fetch timed out for ${url}. The page took too long to respond.`;
+      }
+      return `Web fetch error: ${err instanceof Error ? err.message : String(err)}`;
     }
   },
 };

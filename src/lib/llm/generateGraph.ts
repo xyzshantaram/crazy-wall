@@ -14,12 +14,12 @@ import { parseLlmGraphResponse } from "./parseResponse";
 import type { LlmGraphResponse } from "./contract";
 import { toolToSpec, type ToolDefinition } from "./tools/types";
 import { fetchNipTool, searchNipsTool } from "./tools/nipTools";
-import { wikipediaSearchTool, wikipediaFetchTool, makeTavilySearchTool } from "./tools/searchTools";
+import { wikipediaSearchTool, wikipediaFetchTool, webFetchTool, makeTavilySearchTool } from "./tools/searchTools";
 import { askUserTool } from "./tools/askUserTool";
 import { useThinkingStore } from "../../stores/thinkingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 
-const MAX_TOOL_STEPS = 8;
+const MAX_TOOL_STEPS = 12;
 
 const MODE_LABEL: Record<SystemPromptOptions["mode"], string> = {
   new_root: "Thinking through your request…",
@@ -51,6 +51,7 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
   const { enabledTools, tavilyApiKey } = useSettingsStore.getState();
   const tools: ToolDefinition[] = [
     askUserTool,
+    webFetchTool,
     fetchNipTool,
     searchNipsTool,
     ...(enabledTools.wikipedia !== false ? [wikipediaSearchTool, wikipediaFetchTool] : []),

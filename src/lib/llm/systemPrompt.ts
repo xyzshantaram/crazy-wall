@@ -250,37 +250,40 @@ Rules:
 const TOOLS_DOC = `
 ## Tools
 
-You have access to the following optional tools. Use them when the user's request requires factual grounding, current information, or source verification — not speculatively.
+You have access to the following tools. Use them proactively whenever a request would benefit from real, specific information.
+
+**The preferred research pattern is: search → get URLs → fetch the actual pages.**
+web_fetch is free and has no API key requirement. Always prefer fetching the actual source over summarising from search snippets alone. A search gives you a list of URLs; web_fetch gives you the real content. Use both together.
 
 **Clarification (always available):**
-- ask_user(question, choices?, allow_freeform?) — pause and ask the user a clarifying question before continuing. Use ONLY when the request is genuinely ambiguous and the answer would significantly change what you produce. One question at a time. Do NOT ask questions you can answer from context, or to seem thorough.
-  - choices: optional array of 2–5 short answer strings to offer as buttons.
-  - allow_freeform: whether to also show a text input (default true).
+- ask_user(question, choices?, allow_freeform?) — pause and ask the user a clarifying question. Use ONLY when the request is genuinely ambiguous and the answer would significantly change your output. One question at a time.
   Example: ask_user("What's your approximate budget?", ["Under $1k", "$1k–$5k", "$5k+"])
-  Example: ask_user("Are you writing this for a technical or general audience?", ["Technical", "General"])
+
+**Web fetch (always available, free, no key needed):**
+- web_fetch(url) — fetch any URL and return the main article content as clean Markdown (Readability + Turndown). Use this to read the actual source once you have a URL from search results, Wikipedia, or the user. Always preferred over relying on search snippets.
+  - After a tavily_search or wikipedia_search, pick the 2–3 most relevant URLs and web_fetch them to get full content.
+  - Use it to follow Wikipedia's own cited sources — get the URL from the search result or article text, then fetch it.
+  - Returns CITATION_JSON at the end — copy it verbatim into citations[].
 
 **Wikipedia (always available):**
-- wikipedia_search(query) — search Wikipedia, returns matching article titles, descriptions, and URLs. Use first to find the right article.
-- wikipedia_fetch(title) — fetch the full summary/intro of a Wikipedia article. Returns the content PLUS a CITATION_JSON line at the end with the exact citation object to use.
-  Best for: historical events, scientific concepts, people, places, companies, established facts.
+- wikipedia_search(query) — returns article titles, descriptions, and URLs. Use to find the right article, then web_fetch the URL for full content.
+- wikipedia_fetch(title) — fetches the Wikipedia article summary directly (use when you just need the Wikipedia summary, not the underlying sources). Returns CITATION_JSON — copy verbatim into citations[].
 
 **Tavily Search (available when user has configured a Tavily API key):**
-- tavily_search(query, max_results?, topic?) — search the web with AI-extracted content. Returns results PLUS a CITATION_JSON_LIST line with ready-made citation objects.
-  topic can be "general", "news", or "finance". Use for current events, recent data, pricing, statistics, or topics Wikipedia doesn't cover well.
+- tavily_search(query, max_results?, topic?) — returns titles, URLs, and snippets. After getting results, web_fetch the most relevant URLs for full content. Returns CITATION_JSON_LIST — copy verbatim into citations[].
+  topic: "general" | "news" | "finance".
 
 **Nostr protocol (for Nostr-specific requests only):**
-- fetch_nip(nip) — fetch an official Nostr NIP spec from GitHub by number.
-- search_nips(kind?, keyword?) — search community draft NIPs on relays.
+- fetch_nip(nip) — fetch an official Nostr NIP spec from GitHub.
+- search_nips(kind?, keyword?) — search community draft NIPs.
 
-**Citation rules — IMPORTANT:**
-- wikipedia_fetch and tavily_search return a CITATION_JSON or CITATION_JSON_LIST line at the end of their output. Copy those objects VERBATIM into the "citations" array of every node whose content used that source. Do not reconstruct URLs yourself — just copy from the CITATION_JSON line.
-- wikipedia_search returns article URLs inline — if you use a search result without fetching the full article, still cite it using those URLs.
-- Every node that draws from a tool result MUST have a "citations" array. A node that uses fetched content but has no citations is an error.
-- Only call tools when the content genuinely benefits — most requests don't need them.
-- ask_user before searching if you need a key parameter (location, budget, audience, timeframe) that would change the whole output.
-- For factual topics, prefer wikipedia_fetch for depth.
-- For recent/current topics, use tavily_search.
-- Never call a tool speculatively. Always finish with your single JSON response.
+**Research strategy:**
+1. Search first (tavily_search or wikipedia_search) to get a list of relevant URLs.
+2. web_fetch the 2–3 most relevant URLs to read actual content — this costs nothing.
+3. If a Wikipedia article cites primary sources you need, get their URLs from the article text and web_fetch those too.
+4. Populate citations[] on every node using the CITATION_JSON / CITATION_JSON_LIST blocks from tool outputs — copy verbatim, do not reconstruct URLs.
+5. A node that uses fetched content but has no citations[] is an error.
+6. Never call tools speculatively. Always finish with your single JSON response.
 `;
 
 export interface SystemPromptOptions {
