@@ -188,7 +188,9 @@ export function applyGraphResponse(response: LlmGraphResponse, opts: ApplyGraphO
               declaredCapabilities: spec.declaredCapabilities,
               approval: { status: "pending" },
             }
-          : { mode: "lua", lua: spec.lua };
+          : spec.render === "markdown"
+            ? { mode: "markdown", markdown: spec.markdown }
+            : { mode: "lua", lua: spec.lua };
 
     const node: Omit<GraphNode, "id" | "childIds"> & { id: string } = {
       id,

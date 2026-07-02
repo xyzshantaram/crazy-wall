@@ -25,7 +25,7 @@ Container types have "children" arrays of more widget nodes.
 - { type: "text", text, style?: "bold"|"italic", text_size?: 1|2|3, variant?: "accent"|"muted"|"success"|"warning"|"danger", badge?: bool, md?: bool }
   text_size 3 = hero value, 2 = heading, 1/default = body. badge=true renders as a pill.
   md=true allows inline markdown (bold/italic/code/links) inside text.
-- { type: "markdown", content }  -- block markdown, use sparingly, only for real prose
+- { type: "markdown", content }  -- block markdown, use sparingly, only for genuinely prose-heavy content where widget primitives would be worse (e.g. a detailed written explanation, a narrative walkthrough). For most nodes, prefer "static" + widget primitives over markdown.
 - { type: "image", url, max_width?, max_height?, avatar?: bool }
 - { type: "divider" }
 - { type: "color", hex }
@@ -216,9 +216,10 @@ outside the JSON). Shape:
       "summary": "1–2 tight narrator sentences for THIS node (10–20 words). Required.",
       "narrativeRole": "lede" | "detail" | "conclusion", // optional, defaults to "detail"
       "kind": "root" | "topic" | "leaf",
-      "render": "static" | "lua" | "nostr-dashboard",
+      "render": "static" | "lua" | "nostr-dashboard" | "markdown",
       "widget": { ... },        // when render == "static"
       "lua": "...",             // when render == "lua" or "nostr-dashboard"
+      "markdown": "...",        // when render == "markdown": full Markdown string
       "declaredCapabilities": [ { "capability": "...", "justification": "..." } ], // when render == "nostr-dashboard" and gated calls are used
       "confidence": 0.0-1.0,     // optional, your confidence in this content
       "reasoning": {             // optional
@@ -239,7 +240,7 @@ outside the JSON). Shape:
 Rules:
 - tempId values are your own short labels, unique within this response, used only to wire parentTempId/edges. The app assigns real ids.
 - parentTempId null means "attach directly to the node/context I was given" (the root you're creating, or the node being expanded).
-- Every node needs a non-empty "summary" AND EITHER "widget" (render=static) OR "lua" (render=lua), never both, never neither.
+- Every node needs a non-empty "summary" AND EITHER "widget" (render=static) OR "lua" (render=lua/nostr-dashboard) OR "markdown" (render=markdown), never more than one, never neither.
 - The order of the "nodes" array IS the narrative reading order — see the narrative flow section above.
 - "edges" is optional -- omit or use [] if there are no explicit relationships beyond the parent/child tree.
 - Do not wrap the JSON in a markdown code fence. Return raw JSON only.

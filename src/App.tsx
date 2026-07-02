@@ -19,6 +19,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareChatId, setShareChatId] = useState<string | null>(null);
+  const [receiveOpen, setReceiveOpen] = useState(false);
   const isConfigured = useSettingsStore((s) => s.isConfigured());
 
   useEffect(() => {
@@ -58,6 +59,7 @@ function App() {
         onExpand={() => setSidebarCollapsed((c) => !c)}
         onOpenSettings={() => setSettingsOpen(true)}
         onShare={(id) => setShareChatId(id)}
+        onReceive={() => setReceiveOpen(true)}
       />
 
       <div className="relative flex-1 min-w-0">
@@ -65,7 +67,7 @@ function App() {
           <button
             onClick={() => setSidebarCollapsed(false)}
             title="Show sidebar"
-            className="absolute top-4 left-4 z-30 w-8 h-8 flex items-center justify-center rounded-lg bg-surface/80 border border-border-soft text-ink-faint hover:text-ink hover:bg-surface transition-colors backdrop-blur-sm"
+            className="absolute top-4 left-4 z-30 w-8 h-8 flex items-center justify-center rounded-xl bg-surface/90 border border-border text-ink-faint hover:text-ink hover:bg-surface hover:border-border-soft transition-all backdrop-blur-sm shadow-panel"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M12 3v10M7 6l-3 2 3 2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -76,14 +78,18 @@ function App() {
         {activeChatId ? (
           <ChatCanvas key={activeChatId} chatId={activeChatId} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-ink-faint text-[13px]">
-            Pick a wall or start a new one
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-ink-faint">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-accent to-accent-2 opacity-20" />
+            <span className="text-[13px]">Pick a wall or start a new one</span>
           </div>
         )}
       </div>
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       {shareChatId && <SharePanel chatId={shareChatId} onClose={() => setShareChatId(null)} />}
+      {receiveOpen && activeChatId && (
+        <SharePanel chatId={activeChatId} receiveMode onClose={() => setReceiveOpen(false)} />
+      )}
       <ConfirmationHost />
       <ToastHost />
     </div>

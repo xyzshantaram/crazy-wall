@@ -535,47 +535,41 @@ function FormWidget({
 }
 
 // ---------------------------------------------------------------------------
-// Minimal markdown (inline + block) -- intentionally tiny, sanitized subset.
+// Markdown rendering — marked for parsing, DOMPurify for sanitization.
+// Exported for use by NodeContentRenderer (markdown-mode nodes) and the
+// inline md=true text widget.
 // ---------------------------------------------------------------------------
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+
+// Configure marked once: no mangling of links, GFM + breaks enabled.
+marked.use({
+  gfm: true,
+  breaks: false,
+  async: false,
+});
+
+/** Render a full block of Markdown to sanitized HTML. */
+export function renderBlockMd(text: string): string {
+  const raw = marked.parse(text) as string;
+  return DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS: [
+      "p", "br", "strong", "em", "code", "pre", "blockquote",
+      "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6",
+      "a", "hr", "table", "thead", "tbody", "tr", "th", "td",
+      "del", "s", "sup", "sub",
+    ],
+    ALLOWED_ATTR: ["href", "target", "rel", "class"],
+    FORCE_BODY: true,
+  });
 }
 
-function renderInlineMd(text: string): string {
-  let out = escapeHtml(text);
-  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
-  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  return out;
-}
-
-function renderBlockMd(text: string): string {
-  const lines = text.split("\n");
-  const html: string[] = [];
-  let inList = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (/^[-*]\s+/.test(trimmed)) {
-      if (!inList) {
-        html.push("<ul>");
-        inList = true;
-      }
-      html.push(`<li>${renderInlineMd(trimmed.replace(/^[-*]\s+/, ""))}</li>`);
-      continue;
-    }
-    if (inList) {
-      html.push("</ul>");
-      inList = false;
-    }
-    if (/^#{1,3}\s+/.test(trimmed)) {
-      const level = trimmed.match(/^#+/)![0].length;
-      html.push(`<h${level + 2}>${renderInlineMd(trimmed.replace(/^#+\s+/, ""))}</h${level + 2}>`);
-    } else if (trimmed) {
-      html.push(`<p>${renderInlineMd(trimmed)}</p>`);
-    }
-  }
-  if (inList) html.push("</ul>");
-  return html.join("");
+/** Render an inline Markdown snippet (no block elements) to sanitized HTML. */
+export function renderInlineMd(text: string): string {
+  const raw = marked.parseInline(text) as string;
+  return DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS: ["strong", "em", "code", "a", "del", "s"],
+    ALLOWED_ATTR: ["href", "target", "rel"],
+  });
 }

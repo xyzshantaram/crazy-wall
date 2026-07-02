@@ -24,11 +24,13 @@ import type { WallPayload } from "../../lib/export/serialize";
 interface Props {
   chatId: string;
   onClose: () => void;
+  /** When true, skip the pick screen and go straight to receive mode */
+  receiveMode?: boolean;
 }
 
 type Mode = "pick" | "send" | "receive";
 
-export function SharePanel({ chatId, onClose }: Props) {
+export function SharePanel({ chatId, onClose, receiveMode = false }: Props) {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const chat = useGraphStore((s) => s.chats[chatId]);
@@ -36,7 +38,7 @@ export function SharePanel({ chatId, onClose }: Props) {
   const savedCode = useSettingsStore((s) => s.shareCodes[chatId] ?? "");
   const setShareCode = useSettingsStore((s) => s.setShareCode);
 
-  const [mode, setMode] = useState<Mode>("pick");
+  const [mode, setMode] = useState<Mode>(receiveMode ? "receive" : "pick");
   const [code, setCode] = useState(savedCode);
   const [transferState, setTransferState] = useState<TransferState>({ status: "idle" });
   const sessionRef = useRef<TransferSession | null>(null);
@@ -99,12 +101,12 @@ export function SharePanel({ chatId, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-[420px] bg-surface border border-border rounded-2xl shadow-panel overflow-hidden">
+      <div className="w-[420px] max-w-[calc(100vw-32px)] bg-surface border border-border rounded-2xl shadow-panel overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
           <div>
             <h2 className="text-[14px] font-semibold text-ink">Share Wall</h2>
-            <p className="text-[12px] text-ink-faint mt-0.5 truncate max-w-[300px]">{chat?.title}</p>
+            <p className="text-[12px] text-ink-faint mt-0.5 truncate max-w-[200px] sm:max-w-[300px]">{chat?.title}</p>
           </div>
           <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-faint hover:text-ink hover:bg-white/6 transition-colors">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>

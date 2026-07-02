@@ -2,10 +2,8 @@
  * FloatingChatBar — always-visible bottom-center prompt bar on the canvas.
  *
  * Behaviour:
- *  - When nothing is selected: sends a free follow-up to the current chat
- *    (multiSelectAction with no pre-selected nodes, or a new expand-all-context call).
- *  - When nodes are selected: pre-fills context label and sends a targeted instruction
- *    (same as SelectionActionBar but inline, so the user never has to hunt for it).
+ *  - When nothing is selected: sends a free follow-up to the current chat.
+ *  - When nodes are selected: pre-fills context label, sends a targeted instruction.
  *  - While busy: shows a Cancel button instead of Submit.
  *  - On submit: clears the input and fires the appropriate action.
  */
@@ -50,6 +48,9 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
     if (!trimmed || busy) return;
     onSubmit(trimmed, Array.from(selectedNodeIds));
     setValue("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "22px";
+    }
   };
 
   // Auto-resize textarea up to 4 rows.
@@ -63,12 +64,14 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
   return (
     <div
       data-no-pan
-      className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-[624px] max-w-[calc(100vw-32px)]"
+      className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-[624px] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-32px)]"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
+      {/* No overflow-hidden — it creates a stacking context that traps the ToolsDropdown fixed popover on WebKit */}
       <div className={`
-        flex flex-col bg-surface/95 backdrop-blur-md border rounded-2xl shadow-panel overflow-hidden
-        transition-all duration-200
-        ${busy ? "border-accent/40" : "border-border hover:border-border-soft focus-within:border-accent/50"}
+        flex flex-col bg-surface/95 backdrop-blur-md border rounded-2xl shadow-panel
+        transition-colors duration-150
+        ${busy ? "border-accent/40" : "border-border-soft hover:border-border focus-within:border-accent/50"}
       `}>
         {/* Context label when nodes are selected */}
         {selectedCount > 0 && (
@@ -83,7 +86,8 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
           </div>
         )}
 
-        <div className="flex items-end gap-2 px-3.5 py-3">
+        {/* Input row */}
+        <div className="flex items-end gap-2 px-3.5 pt-3 pb-2">
           <textarea
             ref={textareaRef}
             value={value}
@@ -99,7 +103,7 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
           {busy ? (
             <button
               onClick={onCancel}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-ink-dim border border-border-soft hover:border-border hover:text-ink transition-colors"
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-ink-dim border border-border-soft hover:border-border hover:text-ink transition-colors"
             >
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
                 <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor" />
@@ -110,18 +114,18 @@ export function FloatingChatBar({ chatId, selectedNodeIds, busy, onSubmit, onCan
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-accent text-white hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-accent text-white hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="Send (Enter)"
             >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           )}
         </div>
 
-        {/* Footer: model + provider info + tools toggle */}
-        <div className="px-3.5 pb-2 -mt-1 flex items-center gap-2">
+        {/* Footer: tools + model info */}
+        <div className="px-3.5 pb-2.5 flex items-center gap-2 border-t border-border-soft/50">
           <ToolsDropdown />
           <div className="w-px h-3 bg-border-soft flex-shrink-0" />
           <span className="text-[10.5px] text-ink-faint truncate">

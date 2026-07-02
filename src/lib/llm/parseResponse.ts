@@ -28,8 +28,8 @@ function extractJsonBlock(text: string): string {
   return trimmed;
 }
 
-function isValidRender(v: unknown): v is "static" | "lua" | "nostr-dashboard" {
-  return v === "static" || v === "lua" || v === "nostr-dashboard";
+function isValidRender(v: unknown): v is "static" | "lua" | "nostr-dashboard" | "markdown" {
+  return v === "static" || v === "lua" || v === "nostr-dashboard" || v === "markdown";
 }
 
 function isValidKind(v: unknown): v is "root" | "topic" | "leaf" {
@@ -98,7 +98,7 @@ export function parseLlmGraphResponse(text: string): LlmGraphResponse {
 
     const title = typeof n.title === "string" && n.title.trim() ? n.title.trim() : "Untitled";
     const kind = isValidKind(n.kind) ? n.kind : "topic";
-    const render = isValidRender(n.render) ? n.render : n.lua ? "lua" : "static";
+    const render = isValidRender(n.render) ? n.render : n.lua ? "lua" : n.markdown ? "markdown" : "static";
     const summary = typeof n.summary === "string" && n.summary.trim() ? n.summary.trim() : "";
 
     if (render === "static" && (typeof n.widget !== "object" || n.widget === null)) {
@@ -106,6 +106,9 @@ export function parseLlmGraphResponse(text: string): LlmGraphResponse {
     }
     if ((render === "lua" || render === "nostr-dashboard") && typeof n.lua !== "string") {
       throw new LlmResponseError(`nodes[${idx}] ("${tempId}") has render=${render} but no lua string.`, text);
+    }
+    if (render === "markdown" && typeof n.markdown !== "string") {
+      throw new LlmResponseError(`nodes[${idx}] ("${tempId}") has render=markdown but no markdown string.`, text);
     }
 
     const parentTempId =

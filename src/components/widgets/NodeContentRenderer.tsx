@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { WidgetRenderer, type WidgetActionHandler } from "./WidgetRenderer";
+import { WidgetRenderer, renderBlockMd, type WidgetActionHandler } from "./WidgetRenderer";
 import { useLuaTile } from "../../lib/lua/useLuaTile";
 import { useLiveLuaTile } from "../../lib/lua/useLiveLuaTile";
 import { getSandboxRuntime } from "../../lib/lua/runtimeManager";
@@ -23,6 +23,9 @@ interface Props {
 }
 
 export function NodeContentRenderer({ nodeId, content, title, onToast }: Props) {
+  if (content.mode === "markdown") {
+    return <MarkdownContent markdown={content.markdown ?? ""} />;
+  }
   if (content.mode === "lua") {
     return <LuaContent nodeId={nodeId} script={content.lua} onToast={onToast} />;
   }
@@ -31,6 +34,29 @@ export function NodeContentRenderer({ nodeId, content, title, onToast }: Props) 
   }
   if (!content.widget) return null;
   return <WidgetRenderer node={content.widget} onAction={() => {}} keyPrefix={nodeId} />;
+}
+
+function MarkdownContent({ markdown }: { markdown: string }) {
+  return (
+    <div
+      className="prose-node text-[13px] leading-relaxed text-ink-dim
+        [&_p]:mb-2 [&_p:last-child]:mb-0
+        [&_h4]:text-[13px] [&_h4]:font-semibold [&_h4]:text-ink [&_h4]:mt-3 [&_h4]:mb-1
+        [&_h5]:text-[12px] [&_h5]:font-semibold [&_h5]:text-ink-dim [&_h5]:mt-2 [&_h5]:mb-1
+        [&_ul]:pl-4 [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:marker:text-ink-faint
+        [&_ol]:pl-4 [&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:marker:text-ink-faint
+        [&_li]:mb-0.5
+        [&_strong]:text-ink [&_strong]:font-semibold
+        [&_em]:italic [&_em]:text-ink-dim
+        [&_code]:bg-surface-3 [&_code]:text-accent-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[12px] [&_code]:font-mono
+        [&_pre]:bg-surface-3 [&_pre]:border [&_pre]:border-border-soft [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:overflow-x-auto [&_pre]:mb-2
+        [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-ink-dim
+        [&_blockquote]:border-l-2 [&_blockquote]:border-accent/40 [&_blockquote]:pl-3 [&_blockquote]:text-ink-faint [&_blockquote]:italic [&_blockquote]:mb-2
+        [&_hr]:border-border-soft [&_hr]:my-2
+        [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2"
+      dangerouslySetInnerHTML={{ __html: renderBlockMd(markdown) }}
+    />
+  );
 }
 
 function LuaContent({ nodeId, script, onToast }: { nodeId: string; script?: string; onToast?: (m: string, v?: string) => void }) {

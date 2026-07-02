@@ -40,16 +40,16 @@ export interface LlmNodeSpec {
    *  "conclusion" = ties it together / the takeaway. Most non-root nodes are "detail". */
   narrativeRole?: "lede" | "detail" | "conclusion";
   /** "static": widget is ready-made JSON, rendered immediately, no sandbox.
-   *  "lua": lua is a nostr-canvas-compatible Lua program executed in the sandbox
-   *  to produce the widget tree (use for anything with live/interactive state:
-   *  sliders, recomputation, checklists that must persist toggle state, forms).
-   *  "nostr-dashboard": like "lua" but the script may call real Nostr capabilities
-   *  (ctx.get_public_key/publish_event/fetch/nip44/navigate) -- only use when the
-   *  user explicitly asked for a live Nostr action/dashboard. Requires
-   *  "declaredCapabilities" listing every capability used, each with a justification. */
-  render: "static" | "lua" | "nostr-dashboard";
+   *  "lua": lua is a nostr-canvas-compatible Lua program executed in the sandbox.
+   *  "nostr-dashboard": like "lua" but may call real Nostr capabilities.
+   *  "markdown": raw Markdown string — use ONLY for genuinely prose-heavy content
+   *  (e.g. a detailed written explanation, narrative text, a long how-to) where
+   *  widget primitives would be a worse fit. For most nodes prefer "static". */
+  render: "static" | "lua" | "nostr-dashboard" | "markdown";
   widget?: WidgetNode;
   lua?: string;
+  /** Present when render === "markdown": the full Markdown string to render. */
+  markdown?: string;
   declaredCapabilities?: LlmCapabilityDeclaration[];
   properties?: Record<string, string | number | boolean>;
   confidence?: number;

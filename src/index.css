@@ -41,6 +41,9 @@
 
 html, body, #root {
   height: 100%;
+  /* Use dvh (dynamic viewport height) on mobile so the layout doesn't
+     jump when the browser address bar shows/hides */
+  height: 100dvh;
 }
 
 body {
@@ -76,7 +79,8 @@ body {
 
 /* canvas dot-grid background — barely-there texture, nodes are the focus */
 .canvas-grid {
-  background-image: radial-gradient(circle, rgba(255,255,255,0.028) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.032) 1px, transparent 1px);
+  background-size: 28px 28px;
   background-repeat: repeat;
 }
 

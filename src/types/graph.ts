@@ -37,7 +37,7 @@ export interface Provenance {
   forkedFrom?: string;
 }
 
-export type RenderMode = "static" | "lua" | "nostr-dashboard";
+export type RenderMode = "static" | "lua" | "nostr-dashboard" | "markdown";
 
 export type NostrCapability = "get-pubkey" | "publish-event" | "nip44-encrypt" | "nip44-decrypt" | "fetch" | "navigate";
 
@@ -56,10 +56,10 @@ export interface NodeContent {
   mode: RenderMode;
   /** Present when mode === "static": the widget tree directly. */
   widget?: WidgetNode;
-  /** Present when mode === "lua" or "nostr-dashboard": ephemeral Lua source (never round-tripped to disk long-term,
-   *  but we do cache the last-generated script so reloads don't need a fresh LLM call
-   *  unless the user asks to regenerate). */
+  /** Present when mode === "lua" or "nostr-dashboard": ephemeral Lua source. */
   lua?: string;
+  /** Present when mode === "markdown": raw markdown string. */
+  markdown?: string;
   /** Present when mode === "nostr-dashboard": capabilities the AI declared it needs, with justifications,
    *  plus the user's approve/reject decision for this exact script. */
   declaredCapabilities?: CapabilityDeclaration[];
