@@ -68,7 +68,9 @@ export function NodeCard({
   const lastClickTime = useRef(0);
   const DOUBLE_TAP_MS = 300;
 
-  // Long-press to peek — timer started in useDrag on first event, cancelled on movement
+  // Long-press timer lives on a wrapper div so it doesn't conflict with
+  // useDrag's own onPointerDown handler (they'd overwrite each other if on
+  // the same element). The wrapper gets pointer events first via bubbling.
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressActive = useRef(false);
 
@@ -79,36 +81,28 @@ export function NodeCard({
     }
   }, []);
 
+  const handleWrapperPointerDown = useCallback((e: React.PointerEvent) => {
+    // Only start for primary touch/mouse, not stylus buttons etc.
+    if (e.button > 0) return;
+    longPressActive.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressActive.current = true;
+      onPeek(node.id);
+    }, 500);
+  }, [node.id, onPeek]);
+
+  const handleWrapperPointerUp = useCallback(() => cancelLongPress(), [cancelLongPress]);
+  const handleWrapperPointerCancel = useCallback(() => cancelLongPress(), [cancelLongPress]);
+
   const bindDrag = useDrag(
     ({ delta: [dx, dy], first, last, movement: [mx, my], event }) => {
       const el = event?.target as HTMLElement | undefined;
       if (el?.closest("[data-no-drag]")) return;
-
-      if (first) {
-        // Start long-press timer on touch/pointer down
-        longPressActive.current = false;
-        longPressTimer.current = setTimeout(() => {
-          longPressActive.current = true;
-          onPeek(node.id);
-        }, 500);
-        return;
-      }
-
-      // Cancel long-press as soon as meaningful movement detected
-      const moved = Math.hypot(mx, my) > 4;
-      if (moved) {
-        cancelLongPress();
-        didDrag.current = true;
-      }
-
-      if (last) {
-        cancelLongPress();
-        setTimeout(() => { didDrag.current = false; }, 0);
-        return;
-      }
-
-      if (!didDrag.current) return; // haven't crossed drag threshold yet
-
+      if (!first) didDrag.current = Math.hypot(mx, my) > 4;
+      if (!first && didDrag.current) cancelLongPress();
+      if (last) setTimeout(() => { didDrag.current = false; }, 0);
+      if (first) return;
+      if (!didDrag.current) return;
       const cdx = dx / zoom;
       const cdy = dy / zoom;
       if (selected && selectedIds.size > 1) {
@@ -157,16 +151,22 @@ export function NodeCard({
 
     return (
       <div
-        data-node-card
-        {...bindDrag()}
-        onClick={handlePromptClick}
-        style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? PROMPT_CARD_WIDTH }}
-        className={`absolute z-10 select-none rounded-xl border transition-all duration-150 cursor-pointer
-          ${selected
-            ? "border-warn/70 shadow-[0_0_0_1px_var(--color-warn),0_8px_24px_-6px_rgba(245,185,90,0.3)]"
-            : "border-warn/20 bg-warn/5 shadow-none hover:border-warn/40"}
-          ${highlighted ? "ring-2 ring-warn/50 ring-offset-1 ring-offset-void" : ""}`}
+        style={{ left: node.position.x, top: node.position.y, position: "absolute" }}
+        onPointerDown={handleWrapperPointerDown}
+        onPointerUp={handleWrapperPointerUp}
+        onPointerCancel={handleWrapperPointerCancel}
       >
+        <div
+          data-node-card
+          {...bindDrag()}
+          onClick={handlePromptClick}
+          style={{ width: node.size?.w ?? PROMPT_CARD_WIDTH }}
+          className={`z-10 select-none rounded-xl border transition-all duration-150 cursor-pointer
+            ${selected
+              ? "border-warn/70 shadow-[0_0_0_1px_var(--color-warn),0_8px_24px_-6px_rgba(245,185,90,0.3)]"
+              : "border-warn/20 bg-warn/5 shadow-none hover:border-warn/40"}
+            ${highlighted ? "ring-2 ring-warn/50 ring-offset-1 ring-offset-void" : ""}`}
+        >
         <div className="flex items-center gap-2.5 px-3.5 py-2.5">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-warn/70 flex-shrink-0">
             <path d="M8 2C4.69 2 2 4.36 2 7.25c0 1.7.85 3.2 2.18 4.17L3.5 14l2.7-1.25C6.74 12.9 7.36 13 8 13c3.31 0 6-2.36 6-5.75S11.31 2 8 2z" fill="currentColor" fillOpacity="0.8"/>
@@ -181,6 +181,7 @@ export function NodeCard({
             </p>
           )}
         </div>
+        </div>
       </div>
     );
   }
@@ -188,11 +189,17 @@ export function NodeCard({
   // ── Regular node ───────────────────────────────────────────────────────────
   return (
     <div
+      style={{ left: node.position.x, top: node.position.y, position: "absolute" }}
+      onPointerDown={handleWrapperPointerDown}
+      onPointerUp={handleWrapperPointerUp}
+      onPointerCancel={handleWrapperPointerCancel}
+    >
+    <div
       data-node-card
       {...bindDrag()}
       onClick={handleCardClick}
-      style={{ left: node.position.x, top: node.position.y, width: node.size?.w ?? CARD_WIDTH }}
-      className={`absolute select-none rounded-2xl border transition-shadow duration-150 ${
+      style={{ width: node.size?.w ?? CARD_WIDTH }}
+      className={`select-none rounded-2xl border transition-shadow duration-150 ${
         selected
           ? "border-accent shadow-[var(--shadow-node-selected)]"
           : highlighted
@@ -271,6 +278,7 @@ export function NodeCard({
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }
