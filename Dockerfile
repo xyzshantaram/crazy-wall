@@ -9,10 +9,13 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
-# --- serve with nginx ---
-FROM nginx:alpine AS runner
-COPY --from=builder /app/dist /usr/share/nginx/html
-# SPA fallback: all routes → index.html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# --- serve with busybox httpd ---
+# busybox httpd serves a 404.html as the error page for missing paths,
+# which we point at index.html for SPA client-side routing.
+FROM busybox:stable AS runner
+WORKDIR /www
+COPY --from=builder /app/dist .
+# SPA fallback: missing paths → index.html (busybox httpd 404 handler)
+RUN ln -s index.html 404.html
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["busybox", "httpd", "-f", "-p", "80", "-h", "/www"]
