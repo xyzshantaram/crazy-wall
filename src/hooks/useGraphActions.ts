@@ -34,10 +34,15 @@ function buildContextNote(nodeIds: string[], includeAncestors = false): string {
   for (const id of nodeIds) {
     const node = state.nodes[id];
     if (!node) continue;
-    lines.push(`- "${node.title}" (${node.kind}): ${node.summary ?? "(no summary)"}`);
+    lines.push(`- "${node.title}" (${node.kind})${node.summary ? `: ${node.summary}` : ""}`);
     if (includeAncestors && node.parentId) {
       const parent = state.nodes[node.parentId];
-      if (parent) lines.push(`  parent: "${parent.title}"`);
+      if (parent) lines.push(`  parent: "${parent.title}"${parent.summary ? ` — ${parent.summary}` : ""}`);
+    }
+    // Include direct children so the model understands what's already been explored
+    const children = Object.values(state.nodes).filter((n) => n.parentId === id);
+    if (children.length > 0) {
+      lines.push(`  children: ${children.map((c) => `"${c.title}"`).join(", ")}`);
     }
   }
   return lines.join("\n");
@@ -129,6 +134,15 @@ function placePromptNode({
     provenance: { createdAt: now, updatedAt: now },
     position: { x: bubbleX, y: bubbleY },
   });
+
+  // Wire edges: input nodes → prompt, prompt → output nodes
+  for (const inputId of inputNodeIds) {
+    store.createEdge({ chatId, from: inputId, to: canvasNodeId, type: "references" });
+  }
+  for (const outputId of outputNodeIds) {
+    store.createEdge({ chatId, from: canvasNodeId, to: outputId, type: "causes" });
+  }
+
   const entry: PromptLogEntry = {
     id: nanoid(),
     createdAt: now,
@@ -322,7 +336,10 @@ export function useGraphActions(opts: UseGraphActionsOptions = {}) {
         const avgX = selected.length ? selected.reduce((s, n) => s + n.position.x, 0) / selected.length : 0;
         const computedAnchorMulti = computeBelowAnchor(nodesInChat(chatId), { centerOn: { x: avgX, y: 0 } });
         const multiMode = nodeIds.length > 0 ? "multi_select" : "follow_up";
-        const contextNote = nodeIds.length > 0 ? buildContextNote(nodeIds) : buildWallContext(chatId);
+        const wallOverview = buildWallContext(chatId);
+        const contextNote = nodeIds.length > 0
+          ? `${wallOverview}\n\nSelected nodes (act on these per the instruction):\n${buildContextNote(nodeIds, true)}`
+          : wallOverview;
         const response = await generateGraph({
           mode: multiMode,
           providerId: cfg.providerId,

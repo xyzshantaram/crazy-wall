@@ -18,6 +18,7 @@ import { ExplainPanel } from "./ExplainPanel";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { FloatingChatBar } from "./FloatingChatBar";
 import { PromptLogPanel } from "./PromptLogPanel";
+import { AskUserHost } from "./AskUserDialog";
 import { computeFramingViewport } from "../../lib/graph/viewportFraming";
 import type { Viewport } from "../../types/graph";
 
@@ -161,6 +162,7 @@ export function ChatCanvas({ chatId }: Props) {
       </CanvasViewport>
 
       <ThinkingPanel chatId={chatId} busy={busyChat} />
+      <AskUserHost />
 
       <CanvasToolbar
         viewport={chat.viewport}

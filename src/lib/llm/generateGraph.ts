@@ -15,6 +15,7 @@ import type { LlmGraphResponse } from "./contract";
 import { toolToSpec, type ToolDefinition } from "./tools/types";
 import { fetchNipTool, searchNipsTool } from "./tools/nipTools";
 import { wikipediaSearchTool, wikipediaFetchTool, makeTavilySearchTool } from "./tools/searchTools";
+import { askUserTool } from "./tools/askUserTool";
 import { useThinkingStore } from "../../stores/thinkingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 
@@ -49,6 +50,7 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
 
   const { enabledTools, tavilyApiKey } = useSettingsStore.getState();
   const tools: ToolDefinition[] = [
+    askUserTool,
     fetchNipTool,
     searchNipsTool,
     ...(enabledTools.wikipedia !== false ? [wikipediaSearchTool, wikipediaFetchTool] : []),

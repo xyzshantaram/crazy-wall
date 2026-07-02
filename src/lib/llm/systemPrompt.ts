@@ -252,6 +252,13 @@ const TOOLS_DOC = `
 
 You have access to the following optional tools. Use them when the user's request requires factual grounding, current information, or source verification — not speculatively.
 
+**Clarification (always available):**
+- ask_user(question, choices?, allow_freeform?) — pause and ask the user a clarifying question before continuing. Use ONLY when the request is genuinely ambiguous and the answer would significantly change what you produce. One question at a time. Do NOT ask questions you can answer from context, or to seem thorough.
+  - choices: optional array of 2–5 short answer strings to offer as buttons.
+  - allow_freeform: whether to also show a text input (default true).
+  Example: ask_user("What's your approximate budget?", ["Under $1k", "$1k–$5k", "$5k+"])
+  Example: ask_user("Are you writing this for a technical or general audience?", ["Technical", "General"])
+
 **Wikipedia (always available):**
 - wikipedia_search(query) — search Wikipedia, returns matching article titles + descriptions. Use first to find the right article.
 - wikipedia_fetch(title) — fetch the full summary/intro of a Wikipedia article by exact title. Use after wikipedia_search.
@@ -265,12 +272,12 @@ You have access to the following optional tools. Use them when the user's reques
 - search_nips(kind?, keyword?) — search community draft NIPs on relays.
 
 **Usage rules:**
-- Only call tools when the content genuinely benefits from real sources — most requests don't need them.
-- For factual topics (science, history, geography, companies), prefer wikipedia_fetch for depth.
+- Only call tools when the content genuinely benefits — most requests don't need them.
+- ask_user before searching if you need a key parameter (location, budget, audience, timeframe) that would change the whole output. Don't ask for things you can infer.
+- For factual topics, prefer wikipedia_fetch for depth.
 - For recent/current topics, use tavily_search.
-- After using ANY tool, populate the "citations" array on each node whose content drew from that source.
+- After using ANY search tool, populate the "citations" array on each node whose content drew from that source.
 - Never call a tool speculatively. Always finish with your single JSON response.
-- After tool calls, return your full JSON response per the output contract below.
 `;
 
 export interface SystemPromptOptions {
