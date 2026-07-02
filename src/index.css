@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  /* Base surfaces — canvas is near-black, nodes sit on top */
+  --color-void: #030406;
+  --color-abyss: #060709;
+  --color-surface: #10121a;
+  --color-surface-2: #161820;
+  --color-surface-3: #1c1f2b;
+  --color-border: #23273a;
+  --color-border-soft: #181b26;
+
+  /* Text */
+  --color-ink: #eef0f6;
+  --color-ink-dim: #9aa1b5;
+  --color-ink-faint: #525873;
+
+  /* Accent — electric indigo/cyan duo, used sparingly */
+  --color-accent: #7c6cff;
+  --color-accent-2: #4ee1d6;
+  --color-accent-dim: #7c6cff33;
+  --color-accent-glow: #7c6cff66;
+
+  /* Semantic */
+  --color-good: #3ddc97;
+  --color-warn: #f5b95a;
+  --color-bad: #ff6b6b;
+
+  --font-sans: "Inter", -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+  /* Node cards lift significantly off the dark canvas */
+  --shadow-node: 0 2px 4px rgba(0,0,0,0.6), 0 12px 32px -8px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
+  --shadow-node-selected: 0 2px 4px rgba(0,0,0,0.6), 0 12px 40px -6px var(--color-accent-glow), 0 0 0 1px var(--color-accent);
+  --shadow-panel: 0 8px 48px -8px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--color-accent-dim);
+}
+
+/* thin, unobtrusive scrollbars for panels that do scroll */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-faint);
+}
+
+/* canvas dot-grid background — barely-there texture, nodes are the focus */
+.canvas-grid {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.028) 1px, transparent 1px);
+  background-repeat: repeat;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 var(--color-accent-glow); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
