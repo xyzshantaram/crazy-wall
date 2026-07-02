@@ -114,8 +114,9 @@ export function ChatCanvas({ chatId }: Props) {
     setTimeout(() => setHighlightedNodeIds(new Set()), 3000);
   }, []);
 
-  // Thinking panel: available if there's any trace (active or completed) and not dismissed
-  const thinkingHasContent = Boolean(thinkingState?.text || thinkingState?.active);
+  // Thinking panel: show whenever busy OR there's trace content (even if model
+  // doesn't return reasoning tokens, we show a spinner while generation runs).
+  const thinkingHasContent = Boolean(thinkingState?.text || thinkingState?.active || busyChat);
   const thinkingDismissed = thinkingState?.dismissed ?? false;
   const thinkingActive = !thinkingDismissed && thinkingHasContent;
 
@@ -159,7 +160,7 @@ export function ChatCanvas({ chatId }: Props) {
         </AnimatePresence>
       </CanvasViewport>
 
-      <ThinkingPanel chatId={chatId} />
+      <ThinkingPanel chatId={chatId} busy={busyChat} />
 
       <CanvasToolbar
         viewport={chat.viewport}
