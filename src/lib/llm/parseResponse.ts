@@ -6,6 +6,9 @@
 
 import type { LlmGraphResponse, LlmNodeSpec, LlmEdgeSpec, LlmCapabilityDeclaration } from "./contract";
 import type { NostrCapability } from "../../types/graph";
+import type { CitationPool } from "./tools/toolRuntime";
+import { validateWidgetNode } from "../../types/widgetSchema";
+import type { WidgetNode } from "../../types/widget";
 
 export class LlmResponseError extends Error {
   raw: string;
@@ -61,7 +64,18 @@ const RELATION_TYPES = new Set([
   "related",
 ]);
 
-export function parseLlmGraphResponse(text: string): LlmGraphResponse {
+/** A minimal, always-valid widget substituted for a node whose LLM-emitted
+ *  widget tree failed schema validation — keeps the rest of the response
+ *  intact instead of discarding the whole graph over one bad node. */
+function invalidWidgetFallback(reason: string): WidgetNode {
+  return {
+    type: "text",
+    text: `This node's content could not be rendered (invalid widget data: ${reason}).`,
+    variant: "danger",
+  };
+}
+
+export function parseLlmGraphResponse(text: string, citationPool?: CitationPool): LlmGraphResponse {
   const jsonStr = extractJsonBlock(text);
   let parsed: unknown;
   try {
@@ -114,6 +128,18 @@ export function parseLlmGraphResponse(text: string): LlmGraphResponse {
     const parentTempId =
       typeof n.parentTempId === "string" && n.parentTempId.trim() ? n.parentTempId.trim() : null;
 
+    // Validate the widget tree shape before it ever reaches WidgetRenderer —
+    // WidgetRenderer has no defensive checks of its own (e.g. TableWidget
+    // calls .map() on `columns`/`rows` unconditionally), and with no error
+    // boundary in the app, a malformed tree crashes the whole canvas rather
+    // than just failing to render this one node. Substitute a fallback
+    // widget instead of throwing, so one bad node doesn't sink the response.
+    let widget: WidgetNode | undefined;
+    if (render === "static") {
+      const validation = validateWidgetNode(n.widget);
+      widget = validation.valid ? (n.widget as WidgetNode) : invalidWidgetFallback(validation.error ?? "unknown");
+    }
+
     const spec: LlmNodeSpec = {
       tempId,
       parentTempId,
@@ -122,7 +148,7 @@ export function parseLlmGraphResponse(text: string): LlmGraphResponse {
       summary,
       narrativeRole: isValidNarrativeRole(n.narrativeRole) ? n.narrativeRole : undefined,
       render,
-      widget: render === "static" ? (n.widget as LlmNodeSpec["widget"]) : undefined,
+      widget,
       lua: render === "lua" || render === "nostr-dashboard" ? (n.lua as string) : undefined,
     };
 
@@ -151,7 +177,22 @@ export function parseLlmGraphResponse(text: string): LlmGraphResponse {
           url: typeof c.url === "string" ? c.url : "",
           note: typeof c.note === "string" ? c.note : undefined,
         }))
-        .filter((c) => c.url);
+        .filter((c) => c.url)
+        // Cross-check against the ground-truth citation pool (URLs actually
+        // fetched by a tool this turn) rather than trusting the model's
+        // "copy verbatim" self-report. A citation whose URL was never
+        // actually fetched is dropped outright — it's either a hallucinated
+        // URL or a typo, and surfacing it as a real source would be worse
+        // than omitting it. When the URL IS in the pool, its title is
+        // corrected to match the fetched source exactly (the model
+        // sometimes paraphrases titles when copying).
+        .filter((c) => {
+          if (!citationPool) return true;
+          if (!citationPool.has(c.url)) return false;
+          const groundTruthTitle = citationPool.titleFor(c.url);
+          if (groundTruthTitle) c.title = groundTruthTitle;
+          return true;
+        });
     }
 
     return spec;

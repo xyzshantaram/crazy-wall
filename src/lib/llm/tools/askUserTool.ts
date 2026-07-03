@@ -12,7 +12,19 @@
  */
 
 import type { ToolDefinition } from "./types";
+import { z } from "zod";
 import { requestAskUser } from "./askUserQueue";
+import { withValidatedArgs } from "./toolRuntime";
+
+const askUserArgs = z.object({
+  question: z.string().trim().min(1, "question must not be empty"),
+  choices: z
+    .array(z.union([z.string(), z.number(), z.boolean()]))
+    .optional()
+    .default([])
+    .transform((arr) => arr.map((c) => String(c)).filter(Boolean).slice(0, 8)),
+  allow_freeform: z.boolean().optional().default(true),
+});
 
 export const askUserTool: ToolDefinition = {
   name: "ask_user",
@@ -39,15 +51,8 @@ export const askUserTool: ToolDefinition = {
     },
     required: ["question"],
   },
-  execute: async (args) => {
-    const question = String(args.question ?? "").trim();
-    if (!question) return "Error: no question provided.";
-
-    const rawChoices = Array.isArray(args.choices) ? args.choices : [];
-    const choices = rawChoices.map((c) => String(c)).filter(Boolean).slice(0, 8);
-    const allowFreeform = args.allow_freeform !== false; // default true
-
-    const answer = await requestAskUser({ question, choices, allowFreeform });
+  execute: withValidatedArgs(askUserArgs, async ({ question, choices, allow_freeform }) => {
+    const answer = await requestAskUser({ question, choices, allowFreeform: allow_freeform });
     return answer || "(no answer provided)";
-  },
+  }),
 };

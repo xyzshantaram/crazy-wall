@@ -28,6 +28,15 @@ interface SettingsState {
   tavilyApiKey: string;
   /** Per-tool enabled/disabled toggle. Defaults to enabled for all. */
   enabledTools: Record<ToolId, boolean>;
+  /**
+   * When true, web_fetch always uses the local Readability-based fetcher
+   * (via the allorigins CORS proxy) even if a Tavily key is configured.
+   * Tavily Extract is the default primary path since it's far more reliable
+   * (handles JS-rendered pages, tables, PDFs) but some users may want to
+   * avoid spending Tavily credits on fetches, or prefer not to route fetched
+   * URLs through Tavily's servers.
+   */
+  preferLocalFetch: boolean;
   nostr: NostrIdentity | null;
   relays: string[];
   /**
@@ -42,6 +51,7 @@ interface SettingsState {
   setModel: (id: ProviderId, model: string) => void;
   setTavilyApiKey: (key: string) => void;
   setToolEnabled: (tool: ToolId, enabled: boolean) => void;
+  setPreferLocalFetch: (prefer: boolean) => void;
   setNostrIdentity: (identity: NostrIdentity | null) => void;
   setRelays: (relays: string[]) => void;
   setShareCode: (chatId: string, code: string) => void;
@@ -61,6 +71,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
       tavilyApiKey: "",
       enabledTools: { wikipedia: true, tavily: true },
+      preferLocalFetch: false,
       nostr: null,
       relays: ["wss://relay.damus.io", "wss://relay.primal.net", "wss://relay.nostr.band"],
       shareCodes: {},
@@ -71,6 +82,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTavilyApiKey: (key) => set({ tavilyApiKey: key }),
       setToolEnabled: (tool, enabled) =>
         set((s) => ({ enabledTools: { ...s.enabledTools, [tool]: enabled } })),
+      setPreferLocalFetch: (prefer) => set({ preferLocalFetch: prefer }),
       setNostrIdentity: (identity) => set({ nostr: identity }),
       setRelays: (relays) => set({ relays }),
       setShareCode: (chatId, code) =>

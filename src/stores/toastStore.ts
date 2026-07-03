@@ -4,6 +4,7 @@
  */
 
 import { create } from "zustand";
+import { nanoid } from "nanoid";
 
 export interface Toast {
   id: string;
@@ -20,7 +21,7 @@ interface ToastState {
 export const useToastStore = create<ToastState>()((set) => ({
   toasts: [],
   push: (message, variant = "default") => {
-    const id = Math.random().toString(36).slice(2);
+    const id = nanoid();
     set((s) => ({ toasts: [...s.toasts, { id, message, variant }] }));
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));

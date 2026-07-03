@@ -2,8 +2,11 @@
  * Tool interface + registry for the LLM agent loop.
  *
  * Mirrors tile-studio's `Tool` pattern (description + JSON-schema parameters
- * + async execute) but without a Zod dependency -- our tool surface is small
- * enough to hand-write JSON Schema directly.
+ * + async execute). The JSON Schema in `parameters` is what's shown to the
+ * model; actual runtime validation/coercion of the model's tool-call
+ * arguments is done separately via zod schemas wrapped around each tool's
+ * `execute()` (see `withValidatedArgs` in toolRuntime.ts) so malformed args
+ * surface a clear error instead of silently coercing to NaN/"undefined".
  */
 
 export interface ToolDefinition {

@@ -27,6 +27,8 @@ export function SettingsPanel({ onClose }: Props) {
   const setRelays = useSettingsStore((s) => s.setRelays);
   const tavilyApiKey = useSettingsStore((s) => s.tavilyApiKey);
   const setTavilyApiKey = useSettingsStore((s) => s.setTavilyApiKey);
+  const preferLocalFetch = useSettingsStore((s) => s.preferLocalFetch);
+  const setPreferLocalFetch = useSettingsStore((s) => s.setPreferLocalFetch);
 
   const [relaysText, setRelaysText] = useState(relays.join("\n"));
   const [loggingIn, setLoggingIn] = useState(false);
@@ -116,6 +118,29 @@ export function SettingsPanel({ onClose }: Props) {
                 placeholder="tvly-..."
                 className="w-full bg-surface-3 border border-border-soft rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent/50 font-mono"
               />
+            </div>
+          </section>
+
+          <section>
+            <div className="text-[11px] uppercase tracking-wide text-ink-faint font-medium mb-2.5">Page fetching</div>
+            <div className="bg-surface-2 border border-border-soft rounded-xl p-3.5">
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <div>
+                  <div className="text-[13px] font-medium text-ink">Use local fetcher instead of Tavily Extract</div>
+                  <div className="text-[11.5px] text-ink-faint">
+                    By default, when a Tavily key is set, web_fetch uses Tavily Extract for cleaner results on
+                    JS-heavy pages, tables, and PDFs. Enable this to always use the local Readability-based fetcher
+                    (via a public CORS proxy) instead — avoids spending Tavily credits and keeps fetched URLs off
+                    Tavily's servers, at the cost of less reliable extraction on complex pages.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferLocalFetch}
+                  onChange={(e) => setPreferLocalFetch(e.target.checked)}
+                  className="accent-[#7c6cff] flex-shrink-0 w-4 h-4"
+                />
+              </label>
             </div>
           </section>
 

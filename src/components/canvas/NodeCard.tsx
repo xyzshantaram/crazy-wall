@@ -8,6 +8,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { useDrag } from "@use-gesture/react";
 import type { GraphNode } from "../../types/graph";
 import { NodeContentRenderer } from "../widgets/NodeContentRenderer";
+import { WidgetErrorBoundary } from "../widgets/WidgetErrorBoundary";
 import { useGraphStore } from "../../stores/graphStore";
 import { toast } from "../../stores/toastStore";
 
@@ -268,12 +269,14 @@ export function NodeCard({
             </div>
           ) : (
             <div className="overflow-y-auto scroll-thin" style={{ maxHeight: CONTENT_MAX_HEIGHT }}>
-              <NodeContentRenderer
-                nodeId={node.id}
-                content={node.content}
-                title={node.title}
-                onToast={(m, v) => toast.push(m, v as never)}
-              />
+              <WidgetErrorBoundary nodeTitle={node.title}>
+                <NodeContentRenderer
+                  nodeId={node.id}
+                  content={node.content}
+                  title={node.title}
+                  onToast={(m, v) => toast.push(m, v as never)}
+                />
+              </WidgetErrorBoundary>
             </div>
           )}
         </div>

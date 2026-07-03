@@ -69,6 +69,85 @@ Default to a "stack" with a mix of stat/table/chart/text as the top-level contai
 a node's widget. Keep each node's content focused — one clear visualization, not a wall of text.
 `;
 
+const EXAMPLES_DOC = `
+## Worked examples — good vs. bad node content
+
+These illustrate the difference between a node that respects the widget-first
+rule and narrative flow, and one that doesn't. Study the shape of the GOOD
+examples, not the specific topic.
+
+### Example 1 — a "leaf" node comparing three options
+
+BAD (prose dump, no widget, unscannable):
+{
+  "render": "markdown",
+  "markdown": "There are three main cloud providers to consider. AWS is the most mature and has the widest range of services, but pricing can be complex and it has a steeper learning curve. GCP has excellent data/ML tooling and simpler pricing, but a smaller service catalog. Azure integrates best with existing Microsoft tooling and enterprise agreements, but its console is often considered clunkier than the others."
+}
+Why it fails: this is exactly the "wall of text inside a card" failure mode.
+Three comparable options with named tradeoffs is a textbook table, and burying
+it in markdown means the user has to actually read every sentence to extract
+what could be scanned in two seconds.
+
+GOOD (same information, table + one connective sentence):
+{
+  "render": "static",
+  "summary": "AWS wins on breadth, GCP on ML tooling, Azure on Microsoft-shop fit.",
+  "widget": {
+    "type": "table",
+    "columns": ["Provider", "Strength", "Weakness"],
+    "rows": [
+      ["AWS", "Widest service catalog", "Complex pricing, steep learning curve"],
+      ["GCP", "Best data/ML tooling", "Smaller service catalog"],
+      ["Azure", "Deep Microsoft integration", "Console UX seen as clunky"]
+    ]
+  }
+}
+
+### Example 2 — a root/lede node
+
+BAD (dense table as the FIRST thing the user sees, no orienting headline):
+{
+  "kind": "root",
+  "summary": "Full breakdown of Q3 marketing spend by channel.",
+  "widget": { "type": "table", "columns": ["Channel","Spend","ROI"], "rows": [ /* 8 rows */ ] }
+}
+Why it fails: the lede node is the user's first impression and should orient,
+not overwhelm. A dense 8-row table belongs in a child node.
+
+GOOD (lede orients with 1-3 stats, detail moves to a child):
+{
+  "kind": "root",
+  "summary": "Q3 spend was up 18% with paid social driving most of the ROI gain.",
+  "widget": {
+    "type": "stack",
+    "children": [
+      { "type": "stat", "label": "Total Q3 spend", "value": "$412k", "delta": "+18%" },
+      { "type": "stat", "label": "Best ROI channel", "value": "Paid Social", "variant": "success" }
+    ],
+    "gap": "md"
+  }
+}
+(The 8-row breakdown becomes a separate child node with narrativeRole "detail".)
+
+### Example 3 — disconnected facts vs. a narrative
+
+BAD (three sibling nodes, all "detail", no sense of order or connection —
+reads like a pile of trivia rather than an argument):
+1. { "title": "Market size", "widget": { "type": "stat", ... } }
+2. { "title": "Competitor list", "widget": { "type": "table", ... } }
+3. { "title": "Our pricing", "widget": { "type": "table", ... } }
+Why it fails: no node states why these three things matter together or what
+conclusion they lead to. The user has to do the synthesis work themselves.
+
+GOOD (same three facts, but ordered and closed out with a verdict):
+1. { "title": "Market size", "narrativeRole": "lede", "summary": "The market is big enough to matter, but crowded.", ... }
+2. { "title": "Competitor list", "narrativeRole": "detail", "summary": "Five players already compete on price alone.", ... }
+3. { "title": "Our pricing", "narrativeRole": "detail", "summary": "We'd need to undercut the median by 15% to stand out.", ... }
+4. { "title": "Recommendation", "narrativeRole": "conclusion", "summary": "Compete on service quality, not price — the market can't absorb another price war.", "widget": { "type": "text", "text": "Compete on service quality, not price.", "style": "bold", "text_size": 2 } }
+Why it works: node 4 doesn't exist in the BAD version at all — adding an
+explicit conclusion node turns three isolated facts into an argument.
+`;
+
 const NARRATIVE_FLOW_DOC = `
 ## Compose a narrative flow, not a pile of facts
 
@@ -255,6 +334,8 @@ You have access to the following tools. Use them proactively whenever a request 
 **The preferred research pattern is: search → get URLs → fetch the actual pages.**
 web_fetch is free and has no API key requirement. Always prefer fetching the actual source over summarising from search snippets alone. A search gives you a list of URLs; web_fetch gives you the real content. Use both together.
 
+**Budget for this turn: at most 5 wikipedia_search calls (free) and at most 4 tavily_search calls (uses the user's paid credits) — separate budgets — and at most 20 fetch calls (web_fetch + wikipedia_fetch combined).** Spend paid Tavily searches deliberately — one well-chosen query beats several vague ones. Wikipedia search is free, so use it liberally when it fits. A URL that fails repeatedly is automatically skipped after a few tries; if that happens, move on to a different source rather than retrying it yourself.
+
 **Clarification (always available):**
 - ask_user(question, choices?, allow_freeform?) — pause and ask the user a clarifying question. Use ONLY when the request is genuinely ambiguous and the answer would significantly change your output. One question at a time.
   Example: ask_user("What's your approximate budget?", ["Under $1k", "$1k–$5k", "$5k+"])
@@ -317,6 +398,7 @@ ${modeGuidance[opts.mode]}
 ${opts.contextNote ? `\n## Context\n\n${opts.contextNote}\n` : ""}
 ${WIDGET_SCHEMA_DOC}
 ${NARRATIVE_FLOW_DOC}
+${EXAMPLES_DOC}
 ${LUA_API_DOC}
 ${TOOLS_DOC}
 ${OUTPUT_CONTRACT_DOC}`;

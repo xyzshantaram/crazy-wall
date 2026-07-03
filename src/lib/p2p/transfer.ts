@@ -11,7 +11,7 @@
 
 import { joinRoom, selfId as trysteroSelfId } from "trystero";
 import type { Room, MessageAction, DataPayload } from "trystero";
-import type { WallPayload } from "../export/serialize";
+import { deserializeWall, type WallPayload } from "../export/serialize";
 
 export { trysteroSelfId as selfId };
 
@@ -80,7 +80,6 @@ export function openTransferRoom(
   wallAction.onMessage = (data: DataPayload, _ctx) => {
     void (async () => {
       try {
-        const { deserializeWall } = await import("../export/serialize");
         const payload = await deserializeWall(new Uint8Array(data as ArrayBuffer));
         onReceived(payload);
         await ackAction.send("ok");

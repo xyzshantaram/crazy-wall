@@ -8,61 +8,11 @@
  */
 
 import type { GraphNode } from "../../types/graph";
-import type { WidgetNode } from "../../types/widget";
+import { extractNodePreview } from "../../lib/graph/nodeText";
 
 interface Props {
   node: GraphNode;
   onDismiss: () => void;
-}
-
-// ── Content extraction ─────────────────────────────────────────────────────
-// Pull plain text out of a widget tree, depth-first, for the preview.
-
-function extractText(w: WidgetNode, depth = 0): string {
-  if (depth > 4) return "";
-  switch (w.type) {
-    case "text": return w.text;
-    case "markdown": return w.content.slice(0, 300);
-    case "stack":
-    case "row":
-      return w.children.map((c) => extractText(c, depth + 1)).filter(Boolean).join(" · ");
-    case "spoiler":
-      return `[${w.title}] ${w.children.map((c) => extractText(c, depth + 1)).filter(Boolean).join(" · ")}`;
-    case "table":
-      return w.columns.join(", ") + (w.rows[0] ? " — " + w.rows[0].join(", ") : "");
-    case "timeline":
-      return w.items.slice(0, 3).map((i) => `${i.date}: ${i.label}`).join(" · ");
-    case "kanban":
-      return w.columns.map((c) => `${c.title} (${c.items.length})`).join(", ");
-    case "checklist":
-      return w.items.slice(0, 5).map((i) => `${i.done ? "✓" : "○"} ${i.label}`).join(" · ");
-    case "stat":
-      return `${w.label}: ${w.value}${w.delta ? ` (${w.delta})` : ""}`;
-    case "badge_group":
-      return w.items.map((i) => i.label).join(", ");
-    case "chart":
-      return w.data.slice(0, 4).map((d) => `${d.label} ${d.value}`).join(", ");
-    case "tree":
-      return w.root.label + (w.root.children?.length ? ` (${w.root.children.length} branches)` : "");
-    case "progress":
-      return `${w.label ?? ""} ${w.value}${w.max ? `/${w.max}` : "%"}`.trim();
-    default:
-      return "";
-  }
-}
-
-function getContentPreview(node: GraphNode): string {
-  const { content } = node;
-  if (content.mode === "markdown" && content.markdown) {
-    return content.markdown.replace(/[#*`_\[\]]/g, "").slice(0, 200).trim();
-  }
-  if (content.mode === "lua") return "Interactive widget (tap to view)";
-  if (content.mode === "nostr-dashboard") return "Live Nostr dashboard (tap to view)";
-  if (content.widget) {
-    const text = extractText(content.widget);
-    return text.slice(0, 200) || "(no preview)";
-  }
-  return "";
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -80,7 +30,7 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 export function NodePeek({ node, onDismiss }: Props) {
-  const preview = getContentPreview(node);
+  const preview = extractNodePreview(node, 200);
 
   return (
     // Full-screen scrim — dismiss on tap outside the card

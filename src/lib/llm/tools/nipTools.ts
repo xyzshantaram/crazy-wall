@@ -8,6 +8,12 @@
 
 import type { ToolDefinition } from "./types";
 import { SimplePool } from "nostr-tools";
+import { z } from "zod";
+import { robustFetch, withResultCache, withValidatedArgs, truncateWithNotice } from "./toolRuntime";
+
+const fetchNipArgs = z.object({
+  nip: z.string().trim().min(1, "nip must not be empty"),
+});
 
 export const fetchNipTool: ToolDefinition = {
   name: "fetch_nip",
@@ -23,25 +29,31 @@ export const fetchNipTool: ToolDefinition = {
     },
     required: ["nip"],
   },
-  execute: async (args) => {
-    const raw = String(args.nip ?? "").trim();
-    const id = raw.padStart(2, "0");
-    const url = `https://raw.githubusercontent.com/nostr-protocol/nips/master/${id}.md`;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) {
-        return res.status === 404
-          ? `NIP-${id} not found. Check the NIP number and try again.`
-          : `Failed to fetch NIP-${id}: HTTP ${res.status}`;
+  execute: withResultCache(
+    "fetch_nip",
+    withValidatedArgs(fetchNipArgs, async ({ nip }) => {
+      const id = nip.padStart(2, "0");
+      const url = `https://raw.githubusercontent.com/nostr-protocol/nips/master/${id}.md`;
+      try {
+        const res = await robustFetch(url);
+        if (!res.ok) {
+          return res.status === 404
+            ? `NIP-${id} not found. Check the NIP number and try again.`
+            : `Failed to fetch NIP-${id}: HTTP ${res.status}`;
+        }
+        const text = await res.text();
+        return truncateWithNotice(text, 8000);
+      } catch (err) {
+        return `Error fetching NIP-${id}: ${err instanceof Error ? err.message : String(err)}`;
       }
-      const text = await res.text();
-      const maxLen = 8000;
-      return text.length > maxLen ? `${text.slice(0, maxLen)}\n\n... (truncated, ${text.length} chars total)` : text;
-    } catch (err) {
-      return `Error fetching NIP-${id}: ${err instanceof Error ? err.message : String(err)}`;
-    }
-  },
+    }),
+  ),
 };
+
+const searchNipsArgs = z.object({
+  kind: z.coerce.number().int().optional(),
+  keyword: z.string().trim().optional(),
+});
 
 const NIP_RELAYS = ["wss://relay.ditto.pub", "wss://relay.primal.net"];
 
@@ -56,11 +68,11 @@ export const searchNipsTool: ToolDefinition = {
       keyword: { type: "string", description: "Keyword to match against title/content/identifier." },
     },
   },
-  execute: async (args) => {
+  execute: withValidatedArgs(searchNipsArgs, async ({ kind, keyword }) => {
     const pool = new SimplePool();
     try {
       const filter: Record<string, unknown> = { kinds: [30817], limit: 20 };
-      if (typeof args.kind === "number") filter["#k"] = [String(args.kind)];
+      if (typeof kind === "number") filter["#k"] = [String(kind)];
       const events = await pool.querySync(NIP_RELAYS, filter as Parameters<typeof pool.querySync>[1]);
 
       let results = events.map((event) => {
@@ -70,10 +82,10 @@ export const searchNipsTool: ToolDefinition = {
         return { title, dTag, kinds, snippet: event.content.slice(0, 200) };
       });
 
-      const keyword = typeof args.keyword === "string" ? args.keyword.toLowerCase() : "";
-      if (keyword) {
+      const lowerKeyword = keyword?.toLowerCase() ?? "";
+      if (lowerKeyword) {
         results = results.filter(
-          (r) => r.title.toLowerCase().includes(keyword) || r.snippet.toLowerCase().includes(keyword) || r.dTag.toLowerCase().includes(keyword),
+          (r) => r.title.toLowerCase().includes(lowerKeyword) || r.snippet.toLowerCase().includes(lowerKeyword) || r.dTag.toLowerCase().includes(lowerKeyword),
         );
       }
 
@@ -87,5 +99,5 @@ export const searchNipsTool: ToolDefinition = {
     } finally {
       pool.destroy();
     }
-  },
+  }),
 };

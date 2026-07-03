@@ -46,6 +46,16 @@ export interface ChatCompletionOptions {
    *  Normalized across providers: OpenRouter uses `reasoning.effort`, DeepSeek/Z.AI
    *  use `thinking.type`. Ignored (harmlessly) by models/providers that don't support it. */
   reasoning?: boolean;
+  /** Force `response_format: {type: "json_object"}` — guarantees syntactically
+   *  valid JSON (no markdown code fences, no trailing prose) on OpenRouter,
+   *  DeepSeek, and Z.AI alike. Only safe to set on calls that do NOT also pass
+   *  `tools` — mixing forced JSON-object output with tool-calling isn't a
+   *  combination any of the three providers document as supported, and the
+   *  model needs the freedom to return `tool_calls` instead of content on any
+   *  turn where tools are offered. `parseLlmGraphResponse`'s code-fence/prose
+   *  stripping stays in place regardless as a fallback for providers/models
+   *  that don't honor this. */
+  jsonMode?: boolean;
   /** AbortSignal to cancel an in-flight request. */
   signal?: AbortSignal;
 }
@@ -84,6 +94,7 @@ export async function chatCompletion(opts: ChatCompletionOptions): Promise<ChatC
   };
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
   if (opts.tools && opts.tools.length > 0) body.tools = opts.tools;
+  if (opts.jsonMode && !opts.tools?.length) body.response_format = { type: "json_object" };
   if (opts.reasoning) {
     // OpenRouter's unified `reasoning` param (works for Claude, Gemini, etc. via
     // this gateway) and DeepSeek/Z.AI's `thinking` param are sent together;

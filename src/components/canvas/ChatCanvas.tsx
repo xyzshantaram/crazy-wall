@@ -4,11 +4,12 @@
  * root node position and reveals the infinite canvas underneath.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGraphStore } from "../../stores/graphStore";
 import { useGraphActions } from "../../hooks/useGraphActions";
 import { useThinkingStore } from "../../stores/thinkingStore";
+import { useNavigationStore } from "../../stores/navigationStore";
 import { IntroScreen } from "../intro/IntroScreen";
 import { CanvasViewport } from "./CanvasViewport";
 import { NodeCard } from "./NodeCard";
@@ -18,6 +19,7 @@ import { ExplainPanel } from "./ExplainPanel";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { FloatingChatBar } from "./FloatingChatBar";
 import { PromptLogPanel } from "./PromptLogPanel";
+import { BookmarksPanel } from "./BookmarksPanel";
 import { AskUserHost } from "./AskUserDialog";
 import { CitationsPanel } from "./CitationsPanel";
 import { NodePeek } from "./NodePeek";
@@ -49,6 +51,7 @@ export function ChatCanvas({ chatId }: Props) {
   const [citationsNodeId, setCitationsNodeId] = useState<string | null>(null);
   const [peekNodeId, setPeekNodeId] = useState<string | null>(null);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [revertConfirmEntryIndex, setRevertConfirmEntryIndex] = useState<number | null>(null);
 
   const handleNodesCreated = useCallback(
@@ -152,6 +155,23 @@ export function ChatCanvas({ chatId }: Props) {
     return { entry: log[idx], index: idx };
   }, [selected, allNodes, chat?.promptLog]);
 
+  // Consume a pending cross-wall "jump to node" request (e.g. from the
+  // search palette). Only acts once this chat is the one being targeted and
+  // has mounted its canvas (container ref ready).
+  const focusRequest = useNavigationStore((s) => s.focusRequest);
+  const clearFocusRequest = useNavigationStore((s) => s.clearFocusRequest);
+  useEffect(() => {
+    if (!focusRequest || focusRequest.chatId !== chatId) return;
+    const node = allNodes[focusRequest.nodeId];
+    const container = containerRef.current;
+    if (!node || !container) return;
+    const rect = container.getBoundingClientRect();
+    const framed = computeFramingViewport([node], { width: rect.width, height: rect.height - 130 }, { padding: 48, maxZoom: 3 });
+    if (framed) setViewport(chatId, framed);
+    setSelected(new Set([node.id]));
+    clearFocusRequest();
+  }, [focusRequest, chatId, allNodes, setViewport, clearFocusRequest]);
+
   if (!chat) return null;
 
   if (!chat.started) {
@@ -226,7 +246,9 @@ export function ChatCanvas({ chatId }: Props) {
         }}
         promptCount={chat?.promptLog?.length ?? 0}
         promptsOpen={promptsOpen}
-        onTogglePrompts={() => setPromptsOpen((o) => !o)}
+        onTogglePrompts={() => { setPromptsOpen((o) => !o); setBookmarksOpen(false); }}
+        bookmarksOpen={bookmarksOpen}
+        onToggleBookmarks={() => { setBookmarksOpen((o) => !o); setPromptsOpen(false); }}
       />
 
       {/* Revert-to-prompt floating button — shown when a prompt bubble is selected */}
@@ -272,7 +294,9 @@ export function ChatCanvas({ chatId }: Props) {
         onToggleThinking={() => { if (thinkingDismissed) reopenThinking(chatId); }}
         promptCount={chat?.promptLog?.length ?? 0}
         promptsOpen={promptsOpen}
-        onTogglePrompts={() => setPromptsOpen((o) => !o)}
+        onTogglePrompts={() => { setPromptsOpen((o) => !o); setBookmarksOpen(false); }}
+        bookmarksOpen={bookmarksOpen}
+        onToggleBookmarks={() => { setBookmarksOpen((o) => !o); setPromptsOpen(false); }}
       />
 
       {/* Prompt history panel */}
@@ -286,6 +310,16 @@ export function ChatCanvas({ chatId }: Props) {
             width: containerRef.current.getBoundingClientRect().width,
             height: containerRef.current.getBoundingClientRect().height,
           }}
+        />
+      )}
+
+      {/* Bookmarks panel */}
+      {bookmarksOpen && (
+        <BookmarksPanel
+          chatId={chatId}
+          viewport={chat.viewport}
+          onClose={() => setBookmarksOpen(false)}
+          onJump={handleJumpViewport}
         />
       )}
 

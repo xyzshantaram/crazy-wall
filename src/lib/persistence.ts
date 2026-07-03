@@ -12,7 +12,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { Chat, GraphEdge, GraphNode } from "../types/graph";
 
 const DB_NAME = "canvas-app";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -30,6 +30,10 @@ function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains("edges")) {
           const store = db.createObjectStore("edges", { keyPath: "id" });
           store.createIndex("chatId", "chatId");
+        }
+        if (!db.objectStoreNames.contains("toolCache")) {
+          const store = db.createObjectStore("toolCache", { keyPath: "key" });
+          store.createIndex("expiresAt", "expiresAt");
         }
       },
     });
@@ -99,4 +103,40 @@ export async function putEdges(edges: GraphEdge[]): Promise<void> {
 export async function deleteEdge(edgeId: string): Promise<void> {
   const db = await getDb();
   await db.delete("edges", edgeId);
+}
+
+// ── Tool result cache (search/fetch results, TTL-based) ─────────────────────
+
+export interface ToolCacheEntry {
+  key: string;
+  value: string;
+  expiresAt: number;
+}
+
+export async function getToolCacheEntry(key: string): Promise<string | null> {
+  const db = await getDb();
+  const entry = await db.get("toolCache", key) as ToolCacheEntry | undefined;
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    void db.delete("toolCache", key);
+    return null;
+  }
+  return entry.value;
+}
+
+export async function putToolCacheEntry(key: string, value: string, ttlMs: number): Promise<void> {
+  const db = await getDb();
+  await db.put("toolCache", { key, value, expiresAt: Date.now() + ttlMs } as ToolCacheEntry);
+}
+
+/** Sweep expired entries — call occasionally (e.g. on app start) to keep the store small. */
+export async function pruneToolCache(): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction("toolCache", "readwrite");
+  const idx = tx.objectStore("toolCache").index("expiresAt");
+  const now = Date.now();
+  for await (const cursor of idx.iterate(IDBKeyRange.upperBound(now))) {
+    cursor.delete();
+  }
+  await tx.done;
 }

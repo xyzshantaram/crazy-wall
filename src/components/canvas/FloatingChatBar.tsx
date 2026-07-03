@@ -34,6 +34,8 @@ interface Props {
   promptCount: number;
   promptsOpen: boolean;
   onTogglePrompts: () => void;
+  bookmarksOpen: boolean;
+  onToggleBookmarks: () => void;
 }
 
 export function FloatingChatBar({
@@ -42,6 +44,7 @@ export function FloatingChatBar({
   viewport, onViewportChange, nodes, containerSize,
   thinkingAvailable, thinkingActive, onToggleThinking,
   promptCount, promptsOpen, onTogglePrompts,
+  bookmarksOpen, onToggleBookmarks,
 }: Props) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -257,6 +260,15 @@ export function FloatingChatBar({
             {footerIconBtn(zoomIn, "Zoom in", false,
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            )}
+
+            <div className="w-px h-3 bg-border-soft mx-1" />
+
+            {/* Bookmarks */}
+            {footerIconBtn(onToggleBookmarks, "Bookmarks", bookmarksOpen,
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2h8a1 1 0 0 1 1 1v11l-5-3-5 3V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
               </svg>
             )}
 

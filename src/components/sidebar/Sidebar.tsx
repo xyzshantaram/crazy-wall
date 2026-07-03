@@ -17,9 +17,10 @@ interface Props {
   onOpenSettings: () => void;
   onShare: (chatId: string) => void;
   onReceive: () => void;
+  onSearch: () => void;
 }
 
-export function Sidebar({ collapsed, onExpand, onOpenSettings, onShare, onReceive }: Props) {
+export function Sidebar({ collapsed, onExpand, onOpenSettings, onShare, onReceive, onSearch }: Props) {
   const chatOrder = useGraphStore((s) => s.chatOrder);
   const chats = useGraphStore((s) => s.chats);
   const activeChatId = useGraphStore((s) => s.activeChatId);
@@ -63,7 +64,7 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings, onShare, onReceiv
       </div>
 
       {/* New wall button */}
-      <div className="px-3 pb-1">
+      <div className="px-3 pb-1 flex flex-col gap-1.5">
         <button
           onClick={() => createChat()}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-medium text-ink-dim hover:text-ink bg-white/[0.03] hover:bg-white/[0.07] border border-border-soft hover:border-border transition-all"
@@ -72,6 +73,19 @@ export function Sidebar({ collapsed, onExpand, onOpenSettings, onShare, onReceiv
             <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           </svg>
           New wall
+        </button>
+        <button
+          onClick={onSearch}
+          className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl text-[12px] text-ink-faint hover:text-ink bg-white/[0.02] hover:bg-white/[0.05] border border-border-soft/50 hover:border-border-soft transition-all"
+        >
+          <span className="flex items-center gap-2">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M10 10l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            Search all walls
+          </span>
+          <kbd className="text-[9.5px] bg-white/5 border border-border-soft rounded px-1 py-0.5">⌘K</kbd>
         </button>
       </div>
 

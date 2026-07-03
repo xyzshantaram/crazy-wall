@@ -7,6 +7,12 @@ import { SharePanel } from "./components/canvas/SharePanel";
 import { ToastHost } from "./components/common/ToastHost";
 import { ConfirmationHost } from "./components/dashboard/ConfirmationHost";
 import { useSettingsStore } from "./stores/settingsStore";
+import { pruneToolCache } from "./lib/persistence";
+import { registerSearchSource } from "./lib/search/searchIndex";
+import { graphNodesSearchSource } from "./lib/search/sources/graphNodesSource";
+import { SearchPalette } from "./components/search/SearchPalette";
+
+registerSearchSource(graphNodesSearchSource);
 
 function App() {
   const hydrated = useGraphStore((s) => s.hydrated);
@@ -20,10 +26,12 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareChatId, setShareChatId] = useState<string | null>(null);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const isConfigured = useSettingsStore((s) => s.isConfigured());
 
   useEffect(() => {
     void hydrate();
+    void pruneToolCache();
   }, [hydrate]);
 
   useEffect(() => {
@@ -60,6 +68,7 @@ function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onShare={(id) => setShareChatId(id)}
         onReceive={() => setReceiveOpen(true)}
+        onSearch={() => setSearchOpen(true)}
       />
 
       <div className="relative flex-1 min-w-0">
@@ -92,6 +101,7 @@ function App() {
       )}
       <ConfirmationHost />
       <ToastHost />
+      <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

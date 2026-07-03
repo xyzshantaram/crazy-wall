@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useThinkingStore, type ThinkingEvent } from "../../stores/thinkingStore";
+import { renderBlockMd, renderInlineMd } from "../widgets/WidgetRenderer";
 
 interface Props {
   chatId: string;
@@ -61,7 +62,10 @@ function ToolCallEvent({ event }: { event: ThinkingEvent }) {
         {toolLabel(event.toolName ?? "")}
       </span>
       {event.content && (
-        <span className="text-[11px] text-ink-faint font-mono truncate min-w-0 pt-0.5">{event.content}</span>
+        <span
+          className="text-[11px] text-ink-faint font-mono truncate min-w-0 pt-0.5 [&_code]:bg-white/8 [&_code]:px-1 [&_code]:rounded"
+          dangerouslySetInnerHTML={{ __html: renderInlineMd(event.content) }}
+        />
       )}
     </div>
   );
@@ -86,9 +90,16 @@ function ToolResultEvent({ event }: { event: ThinkingEvent }) {
         {hasMore && !expanded && <span className="text-ink-faint/50 flex-shrink-0">…</span>}
       </button>
       {expanded && (
-        <pre className="mt-1 text-[10.5px] text-ink-faint font-mono whitespace-pre-wrap break-words leading-relaxed max-h-[120px] overflow-y-auto scroll-thin">
-          {event.content}
-        </pre>
+        <div
+          className="mt-1 text-[11px] text-ink-faint leading-relaxed max-h-[160px] overflow-y-auto scroll-thin
+            [&_p]:mb-1.5 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:pl-4 [&_ol]:list-decimal [&_li]:mb-0.5
+            [&_code]:bg-white/8 [&_code]:px-1 [&_code]:rounded [&_code]:text-[10.5px]
+            [&_pre]:bg-white/5 [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:my-1.5
+            [&_a]:text-accent-2 [&_a]:underline [&_strong]:text-ink-dim [&_strong]:font-medium
+            [&_h1]:text-[12px] [&_h1]:font-semibold [&_h1]:text-ink-dim [&_h1]:mb-1
+            [&_h2]:text-[11.5px] [&_h2]:font-semibold [&_h2]:text-ink-dim [&_h2]:mb-1"
+          dangerouslySetInnerHTML={{ __html: renderBlockMd(event.content) }}
+        />
       )}
     </div>
   );
@@ -96,9 +107,12 @@ function ToolResultEvent({ event }: { event: ThinkingEvent }) {
 
 function ReasoningEvent({ event }: { event: ThinkingEvent }) {
   return (
-    <p className="text-[11.5px] text-ink-faint font-mono leading-relaxed whitespace-pre-wrap py-0.5">
-      {event.content}
-    </p>
+    <div
+      className="text-[11.5px] text-ink-faint leading-relaxed py-0.5
+        [&_p]:mb-1 [&_code]:bg-white/8 [&_code]:px-1 [&_code]:rounded
+        [&_strong]:text-ink-dim [&_strong]:font-medium [&_em]:italic"
+      dangerouslySetInnerHTML={{ __html: renderBlockMd(event.content) }}
+    />
   );
 }
 

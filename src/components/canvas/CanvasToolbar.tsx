@@ -19,6 +19,8 @@ interface Props {
   promptCount: number;
   promptsOpen: boolean;
   onTogglePrompts: () => void;
+  bookmarksOpen: boolean;
+  onToggleBookmarks: () => void;
 }
 
 export function CanvasToolbar({
@@ -26,6 +28,7 @@ export function CanvasToolbar({
   nodes, containerSize,
   thinkingAvailable, thinkingActive, onToggleThinking,
   promptCount, promptsOpen, onTogglePrompts,
+  bookmarksOpen, onToggleBookmarks,
 }: Props) {
   const { zoomIn, zoomOut, resetView, fitAll } = useViewportControls(viewport, onViewportChange);
 
@@ -57,6 +60,15 @@ export function CanvasToolbar({
             {promptCount > 9 ? "9+" : promptCount}
           </span>
         )}
+      </ToolbarButton>
+
+      <div className="w-px h-4 bg-border-soft mx-0.5" />
+
+      {/* Bookmarks */}
+      <ToolbarButton onClick={onToggleBookmarks} title="Bookmarks" active={bookmarksOpen}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M4 2h8a1 1 0 0 1 1 1v11l-5-3-5 3V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+        </svg>
       </ToolbarButton>
 
       <div className="w-px h-4 bg-border-soft mx-0.5" />

@@ -14,7 +14,8 @@ import { parseLlmGraphResponse } from "./parseResponse";
 import type { LlmGraphResponse } from "./contract";
 import { toolToSpec, type ToolDefinition } from "./tools/types";
 import { fetchNipTool, searchNipsTool } from "./tools/nipTools";
-import { wikipediaSearchTool, wikipediaFetchTool, webFetchTool, makeTavilySearchTool } from "./tools/searchTools";
+import { makeWikipediaSearchTool, makeWikipediaFetchTool, makeWebFetchTool, makeTavilySearchTool } from "./tools/searchTools";
+import { ToolCallBudget, CitationPool } from "./tools/toolRuntime";
 import { askUserTool } from "./tools/askUserTool";
 import { useThinkingStore } from "../../stores/thinkingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -49,14 +50,28 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
   ];
 
   const { enabledTools, tavilyApiKey } = useSettingsStore.getState();
+  // Fresh per-turn budget — resets every call to generateGraph (i.e. every
+  // prompt submission), independent of MAX_TOOL_STEPS which bounds the
+  // whole agent loop's round-trips.
+  const budget = new ToolCallBudget();
+  // Ground-truth registry of citations backed by URLs actually fetched this
+  // turn — the model is told to "copy CITATION_JSON verbatim" but nothing
+  // enforced that until now; parseLlmGraphResponse cross-checks against this.
+  const citationPool = new CitationPool();
   const tools: ToolDefinition[] = [
     askUserTool,
-    webFetchTool,
+    makeWebFetchTool(
+      () =>
+        enabledTools.tavily !== false && !useSettingsStore.getState().preferLocalFetch
+          ? useSettingsStore.getState().tavilyApiKey
+          : undefined,
+      budget,
+    ),
     fetchNipTool,
     searchNipsTool,
-    ...(enabledTools.wikipedia !== false ? [wikipediaSearchTool, wikipediaFetchTool] : []),
+    ...(enabledTools.wikipedia !== false ? [makeWikipediaSearchTool(budget), makeWikipediaFetchTool(budget)] : []),
     ...(enabledTools.tavily !== false && tavilyApiKey?.trim()
-      ? [makeTavilySearchTool(() => useSettingsStore.getState().tavilyApiKey)]
+      ? [makeTavilySearchTool(() => useSettingsStore.getState().tavilyApiKey, budget)]
       : []),
   ];
 
@@ -86,7 +101,7 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       }
 
       if (result.toolCalls.length === 0) {
-        return parseLlmGraphResponse(result.content);
+        return parseLlmGraphResponse(result.content, citationPool);
       }
 
       messages.push({
@@ -132,6 +147,11 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
           }
         }
 
+        // Register any CITATION_JSON(_LIST) markers in this tool's output as
+        // ground truth before the model ever sees/copies them — this is the
+        // authoritative record of what was actually fetched this turn.
+        citationPool.ingest(output);
+
         // Push a tool_result event after execution
         useThinkingStore.getState().pushEvent(opts.chatId, {
           type: "tool_result",
@@ -144,6 +164,7 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
     }
 
     // Final forced call — no tools, guarantees a parseable JSON response.
+    // jsonMode is safe here specifically because this call omits `tools`.
     const finalResult = await chatCompletion({
       providerId: opts.providerId,
       apiKey: opts.apiKey,
@@ -152,12 +173,13 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       temperature: 0.3,
       maxTokens: 8000,
       reasoning: true,
+      jsonMode: true,
       signal: opts.signal,
     });
     if (finalResult.reasoning) {
       useThinkingStore.getState().appendReasoning(opts.chatId, finalResult.reasoning);
     }
-    return parseLlmGraphResponse(finalResult.content);
+    return parseLlmGraphResponse(finalResult.content, citationPool);
   } finally {
     thinking.finish(opts.chatId);
   }
