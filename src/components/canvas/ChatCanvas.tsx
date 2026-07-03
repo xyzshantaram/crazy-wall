@@ -24,6 +24,7 @@ import { AskUserHost } from "./AskUserDialog";
 import { CitationsPanel } from "./CitationsPanel";
 import { NodePeek } from "./NodePeek";
 import { computeFramingViewport } from "../../lib/graph/viewportFraming";
+import { STALE_REFRESH_INSTRUCTION } from "../../lib/graph/dependents";
 import type { Viewport } from "../../types/graph";
 
 interface Props {
@@ -38,6 +39,8 @@ export function ChatCanvas({ chatId }: Props) {
   const setViewport = useGraphStore((s) => s.setViewport);
   const createChat = useGraphStore((s) => s.createChat);
   const revertToPrompt = useGraphStore((s) => s.revertToPrompt);
+  const setActiveChat = useGraphStore((s) => s.setActiveChat);
+  const requestFocus = useNavigationStore((s) => s.requestFocus);
 
   const thinkingState = useThinkingStore((s) => s.chats[chatId]);
   const reopenThinking = useThinkingStore((s) => s.reopen);
@@ -134,6 +137,14 @@ export function ChatCanvas({ chatId }: Props) {
     setViewport(chatId, v);
   }, [chatId, setViewport]);
 
+  const handleNavigatePortal = useCallback(
+    (target: { chatId: string; nodeId: string }) => {
+      setActiveChat(target.chatId);
+      requestFocus(target);
+    },
+    [setActiveChat, requestFocus],
+  );
+
   const handleHighlight = useCallback((nodeIds: string[]) => {
     setHighlightedNodeIds(new Set(nodeIds));
     setTimeout(() => setHighlightedNodeIds(new Set()), 3000);
@@ -205,6 +216,8 @@ export function ChatCanvas({ chatId }: Props) {
                 onFork={handleFork}
                 onExplain={setExplainNodeId}
                 onUpdate={setUpdateNodeId}
+                onRefreshStale={(id) => void recomputeNode(id, STALE_REFRESH_INSTRUCTION)}
+                onNavigatePortal={handleNavigatePortal}
                 onShowCitations={setCitationsNodeId}
                 onPeek={setPeekNodeId}
                 onFitNode={(id) => {

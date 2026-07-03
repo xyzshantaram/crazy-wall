@@ -10,7 +10,7 @@
 import { chatCompletion, type ChatMessage } from "../providers/client";
 import type { ProviderId } from "../providers/registry";
 import { buildSystemPrompt, type SystemPromptOptions } from "./systemPrompt";
-import { parseLlmGraphResponse } from "./parseResponse";
+import { parseLlmGraphResponse, LlmResponseError } from "./parseResponse";
 import type { LlmGraphResponse } from "./contract";
 import { toolToSpec, type ToolDefinition } from "./tools/types";
 import { fetchNipTool, searchNipsTool } from "./tools/nipTools";
@@ -21,6 +21,13 @@ import { useThinkingStore } from "../../stores/thinkingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 
 const MAX_TOOL_STEPS = 20;
+// How many extra "please fix this" round-trips we allow when the model's
+// JSON response fails parsing or content-shape validation, before giving up
+// and falling back to lenient parsing (per-node fallback widgets / thrown
+// error) like before this existed. Keeps the failure path from silently
+// shipping obviously-broken content when the model can plausibly just be
+// told what's wrong and asked to correct it in the same conversation.
+const MAX_REPAIR_ATTEMPTS = 2;
 
 const MODE_LABEL: Record<SystemPromptOptions["mode"], string> = {
   new_root: "Thinking through your request…",
@@ -41,6 +48,75 @@ export interface GenerateGraphOptions extends SystemPromptOptions {
   signal?: AbortSignal;
   onProgress?: (status: string) => void;
 }
+
+/**
+ * Parses `content` strictly (rejecting the whole response on ANY node's
+ * content-shape or widget-schema issue, not just hard JSON/structure
+ * errors). On failure, appends a user-role message describing exactly what
+ * was wrong and re-calls the model (no tools) to get a corrected response,
+ * up to MAX_REPAIR_ATTEMPTS times. If every attempt fails, falls back to a
+ * final lenient parse (per-node fallback widgets instead of rejection) so
+ * the user still gets a usable result rather than nothing.
+ *
+ * `messages` is mutated in place (repair turns are appended) so the caller's
+ * conversation stays coherent if this is ever extended to log the exchange.
+ */
+async function parseWithRepair(
+  content: string,
+  messages: ChatMessage[],
+  citationPool: CitationPool,
+  callOpts: { providerId: ProviderId; apiKey: string; model: string; signal?: AbortSignal; chatId: string },
+): Promise<LlmGraphResponse> {
+  let attemptContent = content;
+  for (let attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
+    try {
+      return parseLlmGraphResponse(attemptContent, citationPool, { strict: true });
+    } catch (err) {
+      const message = err instanceof LlmResponseError ? err.message : String(err);
+      if (attempt === MAX_REPAIR_ATTEMPTS) {
+        // Out of retries — ship whatever we can salvage rather than nothing.
+        useThinkingStore.getState().pushEvent(callOpts.chatId, {
+          type: "status",
+          content: `Giving up on repair after ${MAX_REPAIR_ATTEMPTS} attempt(s); using best-effort fallback.`,
+        });
+        return parseLlmGraphResponse(attemptContent, citationPool, { strict: false });
+      }
+
+      useThinkingStore.getState().pushEvent(callOpts.chatId, {
+        type: "status",
+        content: `Response had issues, asking the model to fix them (attempt ${attempt + 1}/${MAX_REPAIR_ATTEMPTS})…`,
+      });
+
+      messages.push({ role: "assistant", content: attemptContent });
+      messages.push({
+        role: "user",
+        content:
+          `Your last response could not be used:\n${message}\n\n` +
+          `Return the corrected, complete JSON response (same shape as before), fixing the issue(s) above. No prose, no code fences, no further tool calls.`,
+      });
+
+      const repairResult = await chatCompletion({
+        providerId: callOpts.providerId,
+        apiKey: callOpts.apiKey,
+        model: callOpts.model,
+        messages,
+        temperature: 0.2,
+        maxTokens: 8000,
+        reasoning: true,
+        jsonMode: true,
+        signal: callOpts.signal,
+      });
+      if (repairResult.reasoning) {
+        useThinkingStore.getState().appendReasoning(callOpts.chatId, repairResult.reasoning);
+      }
+      attemptContent = repairResult.content;
+    }
+  }
+  // Unreachable (loop always returns or throws within MAX_REPAIR_ATTEMPTS+1
+  // iterations), but keeps TypeScript satisfied about the return type.
+  return parseLlmGraphResponse(attemptContent, citationPool, { strict: false });
+}
+
 
 export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGraphResponse> {
   const systemPrompt = buildSystemPrompt(opts);
@@ -101,7 +177,13 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       }
 
       if (result.toolCalls.length === 0) {
-        return parseLlmGraphResponse(result.content, citationPool);
+        return parseWithRepair(result.content, messages, citationPool, {
+          providerId: opts.providerId,
+          apiKey: opts.apiKey,
+          model: opts.model,
+          signal: opts.signal,
+          chatId: opts.chatId,
+        });
       }
 
       messages.push({
@@ -165,11 +247,12 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
 
     // Final forced call — no tools, guarantees a parseable JSON response.
     // jsonMode is safe here specifically because this call omits `tools`.
+    messages.push({ role: "user", content: "Now produce your final JSON response, with no further tool calls." });
     const finalResult = await chatCompletion({
       providerId: opts.providerId,
       apiKey: opts.apiKey,
       model: opts.model,
-      messages: [...messages, { role: "user", content: "Now produce your final JSON response, with no further tool calls." }],
+      messages,
       temperature: 0.3,
       maxTokens: 8000,
       reasoning: true,
@@ -179,7 +262,13 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
     if (finalResult.reasoning) {
       useThinkingStore.getState().appendReasoning(opts.chatId, finalResult.reasoning);
     }
-    return parseLlmGraphResponse(finalResult.content, citationPool);
+    return parseWithRepair(finalResult.content, messages, citationPool, {
+      providerId: opts.providerId,
+      apiKey: opts.apiKey,
+      model: opts.model,
+      signal: opts.signal,
+      chatId: opts.chatId,
+    });
   } finally {
     thinking.finish(opts.chatId);
   }

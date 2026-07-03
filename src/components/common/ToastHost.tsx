@@ -31,7 +31,15 @@ export function ToastHost() {
           className={`pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl border shadow-panel text-[13px] text-ink cursor-pointer animate-fade-in-up max-w-[320px] ${VARIANT_STYLE[t.variant ?? "default"]}`}
         >
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${VARIANT_DOT[t.variant ?? "default"]}`} />
-          {t.message}
+          <span className="flex-1 min-w-0">{t.message}</span>
+          {t.action && (
+            <button
+              onClick={(e) => { e.stopPropagation(); t.action?.onClick(); dismiss(t.id); }}
+              className="flex-shrink-0 px-2 py-1 rounded-lg text-[11.5px] font-medium bg-white/10 hover:bg-white/18 transition-colors"
+            >
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

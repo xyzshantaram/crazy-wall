@@ -38,6 +38,9 @@ interface GraphState extends AppState {
   createNode: (node: Omit<GraphNode, "id" | "childIds"> & { id?: string }) => string;
   updateNode: (nodeId: string, patch: Partial<GraphNode>) => void;
   updateNodeContent: (nodeId: string, content: GraphNode["content"]) => void;
+  /** Flags each node id as stale (context it depended on has changed since
+   *  it was generated). No-op for ids that don't exist or are already stale. */
+  markNodesStale: (nodeIds: string[]) => void;
   setNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
   moveNodes: (deltas: Record<string, { dx: number; dy: number }>) => void;
   setNodeSize: (nodeId: string, size: { w: number; h: number }) => void;
@@ -276,7 +279,23 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
   },
 
   updateNodeContent: (nodeId, content) => {
-    get().updateNode(nodeId, { content, generating: false });
+    // Recomputing a node resolves its own staleness even though it may
+    // introduce staleness in its dependents (handled by the caller via
+    // markNodesStale, since detecting dependents requires the edge graph).
+    get().updateNode(nodeId, { content, generating: false, stale: false });
+  },
+
+  markNodesStale: (nodeIds) => {
+    set((s) => {
+      const nodes = { ...s.nodes };
+      for (const id of nodeIds) {
+        const node = nodes[id];
+        if (!node || node.stale) continue;
+        nodes[id] = { ...node, stale: true };
+        void db.putNode(nodes[id]);
+      }
+      return { nodes };
+    });
   },
 
   setNodePosition: (nodeId, position) => {

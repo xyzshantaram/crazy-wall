@@ -5,9 +5,7 @@
  */
 
 import type { GraphEdge, GraphNode } from "../../types/graph";
-
-const CARD_WIDTH = 300;
-const CARD_HEIGHT_ESTIMATE = 160;
+import { CARD_WIDTH, CARD_HEIGHT_ESTIMATE } from "../../lib/graph/layoutConstants";
 
 const TYPE_COLOR: Record<string, string> = {
   depends_on: "#f5b95a",
@@ -29,9 +27,9 @@ interface Props {
 
 function anchorPoints(a: GraphNode, b: GraphNode) {
   const aw = a.size?.w ?? CARD_WIDTH;
-  const ah = CARD_HEIGHT_ESTIMATE;
+  const ah = a.size?.h ?? CARD_HEIGHT_ESTIMATE;
   const bw = b.size?.w ?? CARD_WIDTH;
-  const bh = CARD_HEIGHT_ESTIMATE;
+  const bh = b.size?.h ?? CARD_HEIGHT_ESTIMATE;
   const aCenter = { x: a.position.x + aw / 2, y: a.position.y + ah / 2 };
   const bCenter = { x: b.position.x + bw / 2, y: b.position.y + bh / 2 };
 

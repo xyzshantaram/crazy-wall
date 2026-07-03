@@ -75,7 +75,22 @@ function invalidWidgetFallback(reason: string): WidgetNode {
   };
 }
 
-export function parseLlmGraphResponse(text: string, citationPool?: CitationPool): LlmGraphResponse {
+export function parseLlmGraphResponse(
+  text: string,
+  citationPool?: CitationPool,
+  opts?: {
+    /** When true, any node whose content shape is invalid (missing/invalid
+     *  widget, missing lua/markdown string, or a widget that fails schema
+     *  validation) causes the WHOLE response to be rejected with a combined
+     *  LlmResponseError describing every such issue at once, instead of
+     *  silently substituting a fallback per node. Used by generateGraph's
+     *  repair loop: reject-and-retry while attempts remain, then fall back
+     *  to lenient (strict: false) substitution on the final attempt so the
+     *  user still gets a usable result. */
+    strict?: boolean;
+  },
+): LlmGraphResponse {
+  const strict = opts?.strict ?? false;
   const jsonStr = extractJsonBlock(text);
   let parsed: unknown;
   try {
@@ -98,6 +113,13 @@ export function parseLlmGraphResponse(text: string, citationPool?: CitationPool)
     throw new LlmResponseError("Model response had no `nodes` array.", text);
   }
 
+  // Soft, per-node content-shape issues (missing/invalid widget for the
+  // declared render mode, or a widget that fails schema validation) are
+  // collected here rather than thrown immediately, so a single strict-mode
+  // rejection can describe every problem in the response at once — far more
+  // useful to a model doing a repair pass than fixing one node per retry.
+  const softIssues: string[] = [];
+
   const seenTempIds = new Set<string>();
   const nodes: LlmNodeSpec[] = obj.nodes.map((raw, idx) => {
     if (typeof raw !== "object" || raw === null) {
@@ -112,32 +134,52 @@ export function parseLlmGraphResponse(text: string, citationPool?: CitationPool)
 
     const title = typeof n.title === "string" && n.title.trim() ? n.title.trim() : "Untitled";
     const kind = isValidKind(n.kind) ? n.kind : "topic";
-    const render = isValidRender(n.render) ? n.render : n.lua ? "lua" : n.markdown ? "markdown" : "static";
+    const declaredRender = isValidRender(n.render) ? n.render : n.lua ? "lua" : n.markdown ? "markdown" : "static";
     const summary = typeof n.summary === "string" && n.summary.trim() ? n.summary.trim() : "";
-
-    if (render === "static" && (typeof n.widget !== "object" || n.widget === null)) {
-      throw new LlmResponseError(`nodes[${idx}] ("${tempId}") has render=static but no widget object.`, text);
-    }
-    if ((render === "lua" || render === "nostr-dashboard") && typeof n.lua !== "string") {
-      throw new LlmResponseError(`nodes[${idx}] ("${tempId}") has render=${render} but no lua string.`, text);
-    }
-    if (render === "markdown" && typeof n.markdown !== "string") {
-      throw new LlmResponseError(`nodes[${idx}] ("${tempId}") has render=markdown but no markdown string.`, text);
-    }
 
     const parentTempId =
       typeof n.parentTempId === "string" && n.parentTempId.trim() ? n.parentTempId.trim() : null;
 
-    // Validate the widget tree shape before it ever reaches WidgetRenderer —
-    // WidgetRenderer has no defensive checks of its own (e.g. TableWidget
-    // calls .map() on `columns`/`rows` unconditionally), and with no error
-    // boundary in the app, a malformed tree crashes the whole canvas rather
-    // than just failing to render this one node. Substitute a fallback
-    // widget instead of throwing, so one bad node doesn't sink the response.
+    // Determine the content-shape problem (if any) for the declared render
+    // mode, and the actual widget/lua/markdown payload to use. Rather than
+    // throwing immediately on a shape mismatch (discarding the whole
+    // response over one bad node, same failure mode WidgetRenderer itself
+    // has with no defensive checks), we substitute a fallback text widget
+    // and record the issue — in strict mode this becomes part of the
+    // combined rejection; in lenient mode the fallback is what ships.
+    let render: LlmNodeSpec["render"] = declaredRender;
     let widget: WidgetNode | undefined;
-    if (render === "static") {
+    let lua: string | undefined;
+    let markdown: string | undefined;
+
+    if (declaredRender === "static" && (typeof n.widget !== "object" || n.widget === null)) {
+      softIssues.push(`nodes[${idx}] ("${tempId}") has render="static" but no widget object.`);
+      render = "static";
+      widget = invalidWidgetFallback("missing widget object");
+    } else if ((declaredRender === "lua" || declaredRender === "nostr-dashboard") && typeof n.lua !== "string") {
+      softIssues.push(`nodes[${idx}] ("${tempId}") has render="${declaredRender}" but no lua string.`);
+      render = "static";
+      widget = invalidWidgetFallback(`missing lua string for render="${declaredRender}"`);
+    } else if (declaredRender === "markdown" && typeof n.markdown !== "string") {
+      softIssues.push(`nodes[${idx}] ("${tempId}") has render="markdown" but no markdown string.`);
+      render = "static";
+      widget = invalidWidgetFallback('missing markdown string for render="markdown"');
+    } else if (declaredRender === "static") {
+      // Validate the widget tree shape before it ever reaches WidgetRenderer —
+      // WidgetRenderer has no defensive checks of its own (e.g. TableWidget
+      // calls .map() on `columns`/`rows` unconditionally), and a malformed
+      // tree would otherwise crash the whole canvas rather than just this node.
       const validation = validateWidgetNode(n.widget);
-      widget = validation.valid ? (n.widget as WidgetNode) : invalidWidgetFallback(validation.error ?? "unknown");
+      if (validation.valid) {
+        widget = n.widget as WidgetNode;
+      } else {
+        softIssues.push(`nodes[${idx}] ("${tempId}") widget failed validation: ${validation.error}`);
+        widget = invalidWidgetFallback(validation.error ?? "unknown");
+      }
+    } else if (declaredRender === "lua" || declaredRender === "nostr-dashboard") {
+      lua = n.lua as string;
+    } else if (declaredRender === "markdown") {
+      markdown = n.markdown as string;
     }
 
     const spec: LlmNodeSpec = {
@@ -149,10 +191,11 @@ export function parseLlmGraphResponse(text: string, citationPool?: CitationPool)
       narrativeRole: isValidNarrativeRole(n.narrativeRole) ? n.narrativeRole : undefined,
       render,
       widget,
-      lua: render === "lua" || render === "nostr-dashboard" ? (n.lua as string) : undefined,
+      lua,
+      markdown,
     };
 
-    if (render === "nostr-dashboard" && Array.isArray(n.declaredCapabilities)) {
+    if (declaredRender === "nostr-dashboard" && Array.isArray(n.declaredCapabilities)) {
       spec.declaredCapabilities = n.declaredCapabilities
         .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
         .map((c) => ({
@@ -197,6 +240,13 @@ export function parseLlmGraphResponse(text: string, citationPool?: CitationPool)
 
     return spec;
   });
+
+  if (strict && softIssues.length > 0) {
+    throw new LlmResponseError(
+      `Response had ${softIssues.length} content issue(s):\n${softIssues.join("\n")}`,
+      text,
+    );
+  }
 
   let edges: LlmEdgeSpec[] | undefined;
   if (Array.isArray(obj.edges)) {

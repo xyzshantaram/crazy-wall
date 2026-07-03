@@ -30,7 +30,7 @@ interface SettingsState {
   enabledTools: Record<ToolId, boolean>;
   /**
    * When true, web_fetch always uses the local Readability-based fetcher
-   * (via the allorigins CORS proxy) even if a Tavily key is configured.
+   * (via a CORS proxy) even if a Tavily key is configured.
    * Tavily Extract is the default primary path since it's far more reliable
    * (handles JS-rendered pages, tables, PDFs) but some users may want to
    * avoid spending Tavily credits on fetches, or prefer not to route fetched

@@ -20,6 +20,7 @@ const KIND_LABEL: Record<string, string> = {
   topic: "Topic",
   leaf: "Detail",
   prompt: "Prompt",
+  portal: "Portal",
 };
 
 const KIND_COLOR: Record<string, string> = {
@@ -27,6 +28,7 @@ const KIND_COLOR: Record<string, string> = {
   topic: "text-accent-2 bg-accent-2/10",
   leaf: "text-ink-faint bg-white/5",
   prompt: "text-warn bg-warn/10",
+  portal: "text-accent-2 bg-accent-2/10",
 };
 
 export function NodePeek({ node, onDismiss }: Props) {

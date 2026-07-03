@@ -12,7 +12,8 @@ export type NodeKind =
   | "root"   // first node from a chat prompt
   | "topic"  // a generic branch/topic node
   | "leaf"   // a terminal elaboration node
-  | "prompt"; // user prompt bubble pinned on the wall
+  | "prompt" // user prompt bubble pinned on the wall
+  | "portal"; // links to a node in a different wall (created by fork)
 
 export type RelationType =
   | "depends_on"
@@ -102,6 +103,12 @@ export interface GraphNode {
   collapsed?: boolean;
   /** True while this node's content is being (re)generated. */
   generating?: boolean;
+  /** True when an ancestor/input node this one depended on has since been
+   *  recomputed, meaning this node's content may no longer reflect current
+   *  context. Cleared when this node itself is recomputed. */
+  stale?: boolean;
+  /** Present when kind === "portal": the wall/node this portal jumps to. */
+  portalTarget?: { chatId: string; nodeId: string };
 }
 
 export interface GraphEdge {

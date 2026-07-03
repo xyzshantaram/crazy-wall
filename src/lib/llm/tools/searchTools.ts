@@ -178,13 +178,20 @@ export function makeWikipediaFetchTool(budget: ToolCallBudget): ToolDefinition {
 
 // ── Web Fetch ──────────────────────────────────────────────────────────────
 
-const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+// CORS proxy for the Readability fallback fetch path. Points at a small
+// Cloudflare Worker (github.com/xyzshantaram — cors-header-proxy) that
+// rewrites the target's Origin header and re-adds Access-Control-Allow-Origin
+// on the response, rather than a third-party public proxy (allorigins.win
+// has intermittently failed with CORS errors of its own — the browser sees
+// the proxy's OWN response missing an ACAO header, i.e. the proxy service
+// itself was misconfigured/down, not the target site).
+const CORS_PROXY = "https://cors-header-proxy.me-5db.workers.dev/corsproxy/?apiurl=";
 const FETCH_CHAR_LIMIT = 8000;
-// The allorigins CORS proxy round-trips through a third-party server that
-// itself has to fetch the target page, so it's meaningfully slower than a
-// direct request — 15s was cutting off perfectly good responses on slower
-// sites. Tavily Extract's own docs default to 10s (basic) / 30s (advanced),
-// so 30s here gives real pages room to load without hammering the budget on
+// The CORS proxy round-trips through a third-party server that itself has
+// to fetch the target page, so it's meaningfully slower than a direct
+// request — 15s was cutting off perfectly good responses on slower sites.
+// Tavily Extract's own docs default to 10s (basic) / 30s (advanced), so 30s
+// here gives real pages room to load without hammering the budget on
 // genuinely dead links (robustFetch still retries + backs off within this).
 const FALLBACK_FETCH_TIMEOUT_MS = 30000;
 
@@ -199,7 +206,7 @@ function isValidHttpUrl(url: string): URL | null {
   }
 }
 
-/** Readability + Turndown extraction via the allorigins CORS proxy. Used when no
+/** Readability + Turndown extraction via the CORS proxy. Used when no
  *  Tavily key is configured, or as a fallback if Tavily Extract itself fails. */
 async function fetchViaReadability(url: string): Promise<string> {
   const proxyUrl = `${CORS_PROXY}${encodeURIComponent(url)}`;

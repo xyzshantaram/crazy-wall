@@ -30,6 +30,13 @@ interface Props {
   onFork: (nodeId: string) => void;
   onExplain: (nodeId: string) => void;
   onUpdate: (nodeId: string) => void;
+  /** Called when the user clicks "Refresh" on a stale node — re-recomputes
+   *  it using the standard context-changed instruction rather than asking
+   *  the user to type one. */
+  onRefreshStale: (nodeId: string) => void;
+  /** Called when a portal node (kind === "portal") is clicked — parent
+   *  switches the active chat and focuses the target node there. */
+  onNavigatePortal: (target: { chatId: string; nodeId: string }) => void;
   /** Lifted out of NodeCard so CitationsPanel renders outside the canvas transform stacking context. */
   onShowCitations: (nodeId: string) => void;
   /** Called after a long-press — parent renders the peek overlay outside the canvas transform. */
@@ -41,10 +48,11 @@ interface Props {
 
 export function NodeCard({
   node, selected, highlighted, zoom, selectedIds,
-  onSelect, onExpand, onFork, onExplain, onUpdate, onShowCitations, onPeek, onFitNode, generating,
+  onSelect, onExpand, onFork, onExplain, onUpdate, onRefreshStale, onNavigatePortal, onShowCitations, onPeek, onFitNode, generating,
 }: Props) {
   const setNodePosition = useGraphStore((s) => s.setNodePosition);
   const moveNodes = useGraphStore((s) => s.moveNodes);
+  const setNodeSize = useGraphStore((s) => s.setNodeSize);
   const toggleCollapsed = useGraphStore((s) => s.toggleCollapsed);
   const togglePinned = useGraphStore((s) => s.togglePinned);
   const deleteNode = useGraphStore((s) => s.deleteNode);
@@ -64,6 +72,42 @@ export function NodeCard({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Reports the card's REAL rendered height back to the graph store so
+  // layout math (applyGraphResponse's tree packing, anchorLayout's
+  // below-anchor placement, EdgesLayer's line anchor points, viewport
+  // framing) can use actual sizes instead of the CARD_HEIGHT_ESTIMATE
+  // constant, which is just an average guess and drifts badly for anything
+  // notably shorter/taller than typical (e.g. a big table vs a one-line
+  // stat). Width is NOT reported here — width is something WE set (fixed
+  // per node kind), so reporting it back would just be echoing our own
+  // input, not measuring anything real. Debounced because content height
+  // legitimately changes several times during generation (skeleton → final
+  // content) and while collapsing/expanding — writing to the store (and
+  // therefore IndexedDB) on every intermediate frame would be wasteful.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(([entry]) => {
+      const h = Math.round(entry.contentRect.height);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const current = useGraphStore.getState().nodes[node.id];
+        if (current && current.size?.h !== h) {
+          setNodeSize(node.id, { w: current.size?.w ?? el.getBoundingClientRect().width, h });
+        }
+      }, 150);
+    });
+    ro.observe(el);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      ro.disconnect();
+    };
+    // Only re-attach if the node identity changes; setNodeSize is a stable
+    // zustand action reference.
+  }, [node.id, setNodeSize]);
 
   const didDrag = useRef(false);
   const lastClickTime = useRef(0);
@@ -187,6 +231,64 @@ export function NodeCard({
     );
   }
 
+  // ── Portal (links to a node in a different wall) ────────────────────────────
+  if (node.kind === "portal") {
+    // The target lives in a DIFFERENT chat's node map, so this card has to
+    // reach across chats to check it still exists — deleting the target
+    // node (directly, or via that wall's own revertToPrompt) doesn't touch
+    // this portal at all, since it's tracked in ITS OWN chat's prompt log,
+    // not the target's. Surface that as a visibly "dead" state rather than
+    // silently no-op-ing on click with no explanation.
+    const targetExists = node.portalTarget ? Boolean(useGraphStore.getState().nodes[node.portalTarget.nodeId]) : false;
+
+    const handlePortalClick = (e: React.MouseEvent) => {
+      if (didDrag.current) return;
+      if (longPressActive.current) { longPressActive.current = false; return; }
+      if (!node.portalTarget) return;
+      onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
+      if (!targetExists) {
+        toast.push("The node this portal links to no longer exists.", "warning");
+        return;
+      }
+      onNavigatePortal(node.portalTarget);
+    };
+
+    return (
+      <div
+        style={{ left: node.position.x, top: node.position.y, position: "absolute" }}
+        onPointerDown={handleWrapperPointerDown}
+        onPointerUp={handleWrapperPointerUp}
+        onPointerCancel={handleWrapperPointerCancel}
+      >
+        <div
+          data-node-card
+          {...bindDrag()}
+          onClick={handlePortalClick}
+          style={{ width: node.size?.w ?? PROMPT_CARD_WIDTH }}
+          title={targetExists ? undefined : "Broken link — target node no longer exists"}
+          className={`z-10 select-none rounded-full border transition-all duration-150 ${targetExists ? "cursor-pointer" : "cursor-not-allowed"}
+            ${!targetExists
+              ? "border-bad/25 bg-bad/5 opacity-60"
+              : selected
+              ? "border-accent-2/70 shadow-[0_0_0_1px_var(--color-accent-2),0_8px_24px_-6px_rgba(78,225,214,0.3)]"
+              : "border-accent-2/25 bg-accent-2/5 shadow-none hover:border-accent-2/50"}`}
+        >
+          <div className="flex items-center gap-2 px-3.5 py-2">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className={`flex-shrink-0 ${targetExists ? "text-accent-2/80" : "text-bad/70"}`}>
+              <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.4" />
+              {targetExists
+                ? <path d="M6 8h4M8.5 6l2 2-2 2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                : <path d="M6 6l4 4M10 6l-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />}
+            </svg>
+            <p className={`text-[13px] font-medium leading-none flex-1 min-w-0 truncate ${targetExists ? "text-accent-2/90" : "text-bad/70 line-through"}`}>
+              {node.title}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Regular node ───────────────────────────────────────────────────────────
   return (
     <div
@@ -197,6 +299,7 @@ export function NodeCard({
     >
     <div
       data-node-card
+      ref={cardRef}
       {...bindDrag()}
       onClick={handleCardClick}
       style={{ width: node.size?.w ?? CARD_WIDTH }}
@@ -205,6 +308,8 @@ export function NodeCard({
           ? "border-accent shadow-[var(--shadow-node-selected)]"
           : highlighted
           ? "border-warn/60 shadow-[0_0_0_2px_rgba(245,185,90,0.25),var(--shadow-node)]"
+          : node.stale
+          ? "border-warn/35 shadow-[var(--shadow-node)]"
           : "border-border shadow-[var(--shadow-node)]"
       } bg-surface backdrop-blur-sm cursor-grab active:cursor-grabbing`}
     >
@@ -223,6 +328,12 @@ export function NodeCard({
           )}
         </button>
         <span className="flex-1 text-[13px] font-medium text-ink truncate">{node.title}</span>
+        {node.stale && (
+          <span
+            title="Context this was generated from has changed — content may be out of date"
+            className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-warn"
+          />
+        )}
         {node.pinned && (
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" className="text-accent flex-shrink-0">
             <path d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5L8 2z" fill="currentColor" />
@@ -246,6 +357,7 @@ export function NodeCard({
                 { label: "Expand", action: () => onExpand(node.id) },
                 { label: "Fork into new canvas", action: () => onFork(node.id) },
                 { label: "Regenerate…", action: () => onUpdate(node.id) },
+                ...(node.stale ? [{ label: "Refresh (context changed)", action: () => onRefreshStale(node.id) }] : []),
                 { label: node.pinned ? "Unpin" : "Pin", action: () => togglePinned(node.id) },
                 { label: node.collapsed ? "Expand card" : "Collapse card", action: () => toggleCollapsed(node.id) },
                 { label: "Explain", action: () => onExplain(node.id) },

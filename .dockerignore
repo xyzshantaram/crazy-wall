@@ -6,5 +6,4 @@ dist
 .env
 .env.*
 src/assets/*.png
-public/pwa-*.png
 README.md
