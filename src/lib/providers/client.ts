@@ -69,8 +69,36 @@ export interface ChatCompletionResult {
   reasoning: string | null;
   toolCalls: ToolCall[];
   finishReason: string | null;
+  /** Token usage for this single request, normalized across the three
+   *  providers' slightly different `usage` shapes. null if the provider
+   *  omitted the field entirely (shouldn't normally happen, but a response
+   *  parse failure elsewhere shouldn't be compounded by a crash here). */
+  usage: UsageInfo | null;
   raw: unknown;
 }
+
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Tokens served from a prompt cache at a discounted rate. 0 if the
+   *  provider doesn't report this or none were cached. Sourced from
+   *  OpenRouter's `prompt_tokens_details.cached_tokens`, DeepSeek's
+   *  `prompt_cache_hit_tokens`, or Z.AI's `prompt_tokens_details.cached_tokens`. */
+  cachedTokens: number;
+  /** Reasoning/thinking tokens included within completionTokens, when the
+   *  provider breaks it out separately (currently only OpenRouter's
+   *  `completion_tokens_details.reasoning_tokens`). null if not reported. */
+  reasoningTokens: number | null;
+  /** Actual dollar cost billed for this request, ONLY populated when the
+   *  provider itself reports it (currently only OpenRouter's `usage.cost`,
+   *  which reflects real billing including any provider-side markup/BYOK
+   *  discount). null for DeepSeek/Z.AI — their cost must be estimated
+   *  client-side from a hardcoded pricing table instead (see pricingTables.ts),
+   *  since neither returns a cost figure in the response body at all. */
+  costUsd: number | null;
+}
+
 
 export class ProviderError extends Error {
   status?: number;
@@ -150,7 +178,36 @@ export async function chatCompletion(opts: ChatCompletionOptions): Promise<ChatC
   const toolCalls: ToolCall[] = Array.isArray(choice?.message?.tool_calls) ? choice.message.tool_calls : [];
   const finishReason = choice?.finish_reason ?? null;
   const reasoning = extractReasoning(choice?.message);
-  return { content, reasoning, toolCalls, finishReason, raw: json };
+  const usage = extractUsage(json?.usage);
+  return { content, reasoning, toolCalls, finishReason, usage, raw: json };
+}
+
+/** Normalizes the three providers' `usage` object shapes into one common
+ *  UsageInfo. All three are OpenAI-compatible at the top level
+ *  (prompt_tokens/completion_tokens/total_tokens); they diverge on cached-
+ *  token and cost reporting:
+ *    - OpenRouter: prompt_tokens_details.cached_tokens, cost (real dollars)
+ *    - DeepSeek:   prompt_cache_hit_tokens (NOT nested under a details object)
+ *    - Z.AI:       prompt_tokens_details.cached_tokens, no cost field
+ */
+function extractUsage(usage: Record<string, unknown> | undefined): UsageInfo | null {
+  if (!usage || typeof usage !== "object") return null;
+  const promptTokens = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0;
+  const completionTokens = typeof usage.completion_tokens === "number" ? usage.completion_tokens : 0;
+  const totalTokens = typeof usage.total_tokens === "number" ? usage.total_tokens : promptTokens + completionTokens;
+
+  const promptDetails = usage.prompt_tokens_details as Record<string, unknown> | undefined;
+  const cachedTokens =
+    (typeof promptDetails?.cached_tokens === "number" ? promptDetails.cached_tokens : undefined) ??
+    (typeof usage.prompt_cache_hit_tokens === "number" ? usage.prompt_cache_hit_tokens : undefined) ??
+    0;
+
+  const completionDetails = usage.completion_tokens_details as Record<string, unknown> | undefined;
+  const reasoningTokens = typeof completionDetails?.reasoning_tokens === "number" ? completionDetails.reasoning_tokens : null;
+
+  const costUsd = typeof usage.cost === "number" ? usage.cost : null;
+
+  return { promptTokens, completionTokens, totalTokens, cachedTokens, reasoningTokens, costUsd };
 }
 
 function extractReasoning(message: Record<string, unknown> | undefined): string | null {

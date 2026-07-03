@@ -7,6 +7,7 @@
 
 import type { GraphNode, Viewport } from "../../types/graph";
 import { useViewportControls } from "./useViewportControls";
+import { ContextRingButton } from "./ContextRingButton";
 
 interface Props {
   viewport: Viewport;
@@ -21,6 +22,9 @@ interface Props {
   onTogglePrompts: () => void;
   bookmarksOpen: boolean;
   onToggleBookmarks: () => void;
+  /** null when no completed turn yet or context length unknown for the model. */
+  contextWindowPercent: number | null;
+  onOpenContextUsage: () => void;
 }
 
 export function CanvasToolbar({
@@ -29,6 +33,7 @@ export function CanvasToolbar({
   thinkingAvailable, thinkingActive, onToggleThinking,
   promptCount, promptsOpen, onTogglePrompts,
   bookmarksOpen, onToggleBookmarks,
+  contextWindowPercent, onOpenContextUsage,
 }: Props) {
   const { zoomIn, zoomOut, resetView, fitAll } = useViewportControls(viewport, onViewportChange);
 
@@ -105,6 +110,11 @@ export function CanvasToolbar({
           <rect x="5" y="5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3" />
         </svg>
       </ToolbarButton>
+
+      <div className="w-px h-4 bg-border-soft mx-0.5" />
+
+      {/* Context & usage */}
+      <ContextRingButton percent={contextWindowPercent} onClick={onOpenContextUsage} />
     </div>
   );
 }

@@ -7,7 +7,7 @@
  * response into a validated LlmGraphResponse.
  */
 
-import { chatCompletion, type ChatMessage } from "../providers/client";
+import { chatCompletion, type ChatMessage, type UsageInfo } from "../providers/client";
 import type { ProviderId } from "../providers/registry";
 import { buildSystemPrompt, type SystemPromptOptions } from "./systemPrompt";
 import { parseLlmGraphResponse, LlmResponseError } from "./parseResponse";
@@ -19,6 +19,8 @@ import { ToolCallBudget, CitationPool } from "./tools/toolRuntime";
 import { askUserTool } from "./tools/askUserTool";
 import { useThinkingStore } from "../../stores/thinkingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useUsageStore, addUsage, EMPTY_USAGE_TOTALS } from "../../stores/usageStore";
+import { useGraphStore } from "../../stores/graphStore";
 
 const MAX_TOOL_STEPS = 20;
 // How many extra "please fix this" round-trips we allow when the model's
@@ -66,6 +68,7 @@ async function parseWithRepair(
   messages: ChatMessage[],
   citationPool: CitationPool,
   callOpts: { providerId: ProviderId; apiKey: string; model: string; signal?: AbortSignal; chatId: string },
+  turnUsage: { current: UsageInfo[] },
 ): Promise<LlmGraphResponse> {
   let attemptContent = content;
   for (let attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
@@ -106,6 +109,7 @@ async function parseWithRepair(
         jsonMode: true,
         signal: callOpts.signal,
       });
+      if (repairResult.usage) turnUsage.current.push(repairResult.usage);
       if (repairResult.reasoning) {
         useThinkingStore.getState().appendReasoning(callOpts.chatId, repairResult.reasoning);
       }
@@ -155,6 +159,16 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const thinking = useThinkingStore.getState();
   thinking.start(opts.chatId, MODE_LABEL[opts.mode]);
+  useUsageStore.getState().beginTurn(opts.chatId);
+  // Accumulates every raw HTTP response's usage across this whole call —
+  // the tool-calling loop, the final forced call, and any repair retries —
+  // since the user experiences all of that as a single "turn" even though
+  // it's several requests under the hood. Recorded into both the ephemeral
+  // usageStore (for "last turn" display) and the persisted cumulativeUsage
+  // on the Chat record in the `finally` block below, so a turn that errors
+  // out partway still has its actual token spend reflected rather than
+  // silently discarded.
+  const turnUsage: { current: UsageInfo[] } = { current: [] };
 
   try {
     let steps = 0;
@@ -171,19 +185,20 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
         reasoning: true,
         signal: opts.signal,
       });
+      if (result.usage) turnUsage.current.push(result.usage);
 
       if (result.reasoning) {
         useThinkingStore.getState().appendReasoning(opts.chatId, result.reasoning);
       }
 
       if (result.toolCalls.length === 0) {
-        return parseWithRepair(result.content, messages, citationPool, {
+        return await parseWithRepair(result.content, messages, citationPool, {
           providerId: opts.providerId,
           apiKey: opts.apiKey,
           model: opts.model,
           signal: opts.signal,
           chatId: opts.chatId,
-        });
+        }, turnUsage);
       }
 
       messages.push({
@@ -259,17 +274,23 @@ export async function generateGraph(opts: GenerateGraphOptions): Promise<LlmGrap
       jsonMode: true,
       signal: opts.signal,
     });
+    if (finalResult.usage) turnUsage.current.push(finalResult.usage);
     if (finalResult.reasoning) {
       useThinkingStore.getState().appendReasoning(opts.chatId, finalResult.reasoning);
     }
-    return parseWithRepair(finalResult.content, messages, citationPool, {
+    return await parseWithRepair(finalResult.content, messages, citationPool, {
       providerId: opts.providerId,
       apiKey: opts.apiKey,
       model: opts.model,
       signal: opts.signal,
       chatId: opts.chatId,
-    });
+    }, turnUsage);
   } finally {
     thinking.finish(opts.chatId);
+    if (turnUsage.current.length > 0) {
+      const totals = turnUsage.current.reduce(addUsage, EMPTY_USAGE_TOTALS);
+      useUsageStore.getState().recordTurn(opts.chatId, totals, { providerId: opts.providerId, model: opts.model });
+      useGraphStore.getState().accumulateUsage(opts.chatId, totals);
+    }
   }
 }

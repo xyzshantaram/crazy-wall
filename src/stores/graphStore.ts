@@ -33,6 +33,8 @@ interface GraphState extends AppState {
   logPrompt: (chatId: string, entry: PromptLogEntry) => void;
   /** Delete all nodes created by prompts after entryIndex, then trim the log to entryIndex+1. */
   revertToPrompt: (chatId: string, entryIndex: number) => void;
+  /** Adds one turn's usage totals onto the chat's persisted cumulativeUsage. */
+  accumulateUsage: (chatId: string, usage: Chat["cumulativeUsage"]) => void;
 
   /** Create a node directly (used by the LLM-application layer). */
   createNode: (node: Omit<GraphNode, "id" | "childIds"> & { id?: string }) => string;
@@ -209,6 +211,29 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
       const chat = s.chats[chatId];
       if (!chat) return s;
       const updated = { ...chat, promptLog: [...(chat.promptLog ?? []), entry] };
+      void db.putChat(updated);
+      return { chats: { ...s.chats, [chatId]: updated } };
+    });
+  },
+
+  accumulateUsage: (chatId, usage) => {
+    if (!usage) return;
+    set((s) => {
+      const chat = s.chats[chatId];
+      if (!chat) return s;
+      const prev = chat.cumulativeUsage;
+      const merged: Chat["cumulativeUsage"] = prev
+        ? {
+            promptTokens: prev.promptTokens + usage.promptTokens,
+            completionTokens: prev.completionTokens + usage.completionTokens,
+            totalTokens: prev.totalTokens + usage.totalTokens,
+            cachedTokens: prev.cachedTokens + usage.cachedTokens,
+            reasoningTokens: prev.reasoningTokens + usage.reasoningTokens,
+            costUsd: prev.costUsd + usage.costUsd,
+            hasRealCost: prev.hasRealCost || usage.hasRealCost,
+          }
+        : usage;
+      const updated = { ...chat, cumulativeUsage: merged };
       void db.putChat(updated);
       return { chats: { ...s.chats, [chatId]: updated } };
     });

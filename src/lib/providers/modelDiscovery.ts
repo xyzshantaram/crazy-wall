@@ -35,6 +35,22 @@ export function isGrouped(r: FetchModelsResult): r is GroupedModelList {
   return Array.isArray(r) && r.length > 0 && "models" in (r[0] as object);
 }
 
+/** Looks up a specific model id's contextLength from fetchModels' (cached)
+ *  result. Returns undefined if the model isn't in the discovered list at
+ *  all (e.g. a custom-typed model id) or the provider/endpoint didn't
+ *  report a context_length for it. Used by the Context Usage modal to
+ *  compute "% of context window used" — piggybacks on fetchModels' existing
+ *  10-minute cache rather than adding a second cache layer. */
+export async function findModelContextLength(
+  providerId: ProviderId,
+  apiKey: string,
+  modelId: string,
+): Promise<number | undefined> {
+  const result = await fetchModels(providerId, apiKey);
+  const flat = isGrouped(result) ? result.flatMap((g) => g.models) : result;
+  return flat.find((m) => m.id === modelId)?.contextLength;
+}
+
 // ── Cache ─────────────────────────────────────────────────────────────────
 
 interface CacheEntry { at: number; result: FetchModelsResult }

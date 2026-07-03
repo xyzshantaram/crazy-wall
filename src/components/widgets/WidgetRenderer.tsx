@@ -12,6 +12,7 @@ import type { WidgetNode, WidgetActionPayload } from "../../types/widget";
 import { Chart } from "./Chart";
 import { Matrix } from "./Matrix";
 import { TreeView } from "./TreeView";
+import { renderBlockMd, renderInlineMd } from "../../lib/markdown";
 
 export type WidgetActionHandler = (handler: string, payload: WidgetActionPayload) => void;
 
@@ -534,42 +535,3 @@ function FormWidget({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Markdown rendering — marked for parsing, DOMPurify for sanitization.
-// Exported for use by NodeContentRenderer (markdown-mode nodes) and the
-// inline md=true text widget.
-// ---------------------------------------------------------------------------
-
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-
-// Configure marked once: no mangling of links, GFM + breaks enabled.
-marked.use({
-  gfm: true,
-  breaks: false,
-  async: false,
-});
-
-/** Render a full block of Markdown to sanitized HTML. */
-export function renderBlockMd(text: string): string {
-  const raw = marked.parse(text) as string;
-  return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: [
-      "p", "br", "strong", "em", "code", "pre", "blockquote",
-      "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6",
-      "a", "hr", "table", "thead", "tbody", "tr", "th", "td",
-      "del", "s", "sup", "sub",
-    ],
-    ALLOWED_ATTR: ["href", "target", "rel", "class"],
-    FORCE_BODY: true,
-  });
-}
-
-/** Render an inline Markdown snippet (no block elements) to sanitized HTML. */
-export function renderInlineMd(text: string): string {
-  const raw = marked.parseInline(text) as string;
-  return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: ["strong", "em", "code", "a", "del", "s"],
-    ALLOWED_ATTR: ["href", "target", "rel"],
-  });
-}

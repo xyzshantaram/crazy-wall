@@ -23,8 +23,13 @@ import { BookmarksPanel } from "./BookmarksPanel";
 import { AskUserHost } from "./AskUserDialog";
 import { CitationsPanel } from "./CitationsPanel";
 import { NodePeek } from "./NodePeek";
+import { ContextUsageModal } from "./ContextUsageModal";
 import { computeFramingViewport } from "../../lib/graph/viewportFraming";
 import { STALE_REFRESH_INSTRUCTION } from "../../lib/graph/dependents";
+import { useUsageStore } from "../../stores/usageStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { findModelContextLength } from "../../lib/providers/modelDiscovery";
+import type { ProviderId } from "../../lib/providers/registry";
 import type { Viewport } from "../../types/graph";
 
 interface Props {
@@ -56,6 +61,27 @@ export function ChatCanvas({ chatId }: Props) {
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [revertConfirmEntryIndex, setRevertConfirmEntryIndex] = useState<number | null>(null);
+  const [contextUsageOpen, setContextUsageOpen] = useState(false);
+
+  const lastTurnUsage = useUsageStore((s) => s.lastTurn[chatId] ?? null);
+  const lastTurnMeta = useUsageStore((s) => s.lastTurnMeta[chatId] ?? null);
+  const apiKeys = useSettingsStore((s) => s.apiKeys);
+  const [contextWindowPercent, setContextWindowPercent] = useState<number | null>(null);
+
+  // Recompute "% of context window used" whenever a new turn's usage lands.
+  // Looks up the model's context length via modelDiscovery (cached there),
+  // so this doesn't re-fetch on every render — only when lastTurnUsage
+  // actually changes (i.e. once per completed generation).
+  useEffect(() => {
+    if (!lastTurnUsage || !lastTurnMeta) { setContextWindowPercent(null); return; }
+    let cancelled = false;
+    const providerId = lastTurnMeta.providerId as ProviderId;
+    findModelContextLength(providerId, apiKeys[providerId] ?? "", lastTurnMeta.model).then((len) => {
+      if (cancelled) return;
+      setContextWindowPercent(len ? Math.min(100, (lastTurnUsage.promptTokens / len) * 100) : null);
+    });
+    return () => { cancelled = true; };
+  }, [lastTurnUsage, lastTurnMeta, apiKeys]);
 
   const handleNodesCreated = useCallback(
     (targetChatId: string, nodeIds: string[]) => {
@@ -262,6 +288,8 @@ export function ChatCanvas({ chatId }: Props) {
         onTogglePrompts={() => { setPromptsOpen((o) => !o); setBookmarksOpen(false); }}
         bookmarksOpen={bookmarksOpen}
         onToggleBookmarks={() => { setBookmarksOpen((o) => !o); setPromptsOpen(false); }}
+        contextWindowPercent={contextWindowPercent}
+        onOpenContextUsage={() => setContextUsageOpen(true)}
       />
 
       {/* Revert-to-prompt floating button — shown when a prompt bubble is selected */}
@@ -310,6 +338,8 @@ export function ChatCanvas({ chatId }: Props) {
         onTogglePrompts={() => { setPromptsOpen((o) => !o); setBookmarksOpen(false); }}
         bookmarksOpen={bookmarksOpen}
         onToggleBookmarks={() => { setBookmarksOpen((o) => !o); setPromptsOpen(false); }}
+        contextWindowPercent={contextWindowPercent}
+        onOpenContextUsage={() => setContextUsageOpen(true)}
       />
 
       {/* Prompt history panel */}
@@ -338,6 +368,16 @@ export function ChatCanvas({ chatId }: Props) {
 
       {explainNodeId && allNodes[explainNodeId] && (
         <ExplainPanel node={allNodes[explainNodeId]} onClose={() => setExplainNodeId(null)} />
+      )}
+
+      {contextUsageOpen && chat && (
+        <ContextUsageModal
+          chat={chat}
+          apiKey={apiKeys[(lastTurnMeta?.providerId ?? chat.provider) as ProviderId] ?? ""}
+          lastTurn={lastTurnUsage}
+          lastTurnMeta={lastTurnMeta}
+          onClose={() => setContextUsageOpen(false)}
+        />
       )}
 
       {/* Citations panel — rendered here (outside canvas transform) to avoid stacking context trapping */}

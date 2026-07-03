@@ -5,7 +5,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { WidgetRenderer, renderBlockMd, type WidgetActionHandler } from "./WidgetRenderer";
+import { WidgetRenderer, type WidgetActionHandler } from "./WidgetRenderer";
+import { renderBlockMd } from "../../lib/markdown";
 import { useLuaTile } from "../../lib/lua/useLuaTile";
 import { useLiveLuaTile } from "../../lib/lua/useLiveLuaTile";
 import { getSandboxRuntime } from "../../lib/lua/runtimeManager";

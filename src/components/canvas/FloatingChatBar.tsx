@@ -36,6 +36,8 @@ interface Props {
   onTogglePrompts: () => void;
   bookmarksOpen: boolean;
   onToggleBookmarks: () => void;
+  contextWindowPercent: number | null;
+  onOpenContextUsage: () => void;
 }
 
 export function FloatingChatBar({
@@ -45,6 +47,7 @@ export function FloatingChatBar({
   thinkingAvailable, thinkingActive, onToggleThinking,
   promptCount, promptsOpen, onTogglePrompts,
   bookmarksOpen, onToggleBookmarks,
+  contextWindowPercent, onOpenContextUsage,
 }: Props) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -281,9 +284,43 @@ export function FloatingChatBar({
                 <rect x="5" y="5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.3"/>
               </svg>
             )}
+
+            <div className="w-px h-3 bg-border-soft mx-1" />
+
+            {/* Context & usage */}
+            {footerIconBtn(onOpenContextUsage, "Context & usage", false, <ContextRingIcon percent={contextWindowPercent} />)}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+const RING_SIZE = 12;
+const RING_STROKE = 1.6;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+/** Same ring math as ContextRingButton, sized for the compact mobile footer
+ *  icon slot (which expects a raw <svg>, not the desktop ToolbarButton wrapper). */
+function ContextRingIcon({ percent }: { percent: number | null }) {
+  const dash = ((percent ?? 0) / 100) * RING_CIRCUMFERENCE;
+  return (
+    <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
+      <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={RING_STROKE} />
+      {percent !== null && (
+        <circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={RING_RADIUS}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={RING_STROKE}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${RING_CIRCUMFERENCE}`}
+          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+        />
+      )}
+    </svg>
   );
 }

@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { useThinkingStore, type ThinkingEvent } from "../../stores/thinkingStore";
-import { renderBlockMd, renderInlineMd } from "../widgets/WidgetRenderer";
+import { renderBlockMd, renderInlineMd } from "../../lib/markdown";
 
 interface Props {
   chatId: string;

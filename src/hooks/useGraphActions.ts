@@ -366,7 +366,7 @@ export function useGraphActions(opts: UseGraphActionsOptions = {}) {
           model: cfg.model,
           chatId: newChatId,
           userPrompt: `Continue and deepen this topic in a new context: "${node.title}"`,
-          contextNote: buildContextNote([nodeId]),
+          contextNote: buildContextNote([nodeId], true),
           signal: newAbort(),
         });
         const { newNodeIds: forkNodeIds, anchorPosition: forkAnchor } = applyGraphResponse(response, {
@@ -480,6 +480,10 @@ export function useGraphActions(opts: UseGraphActionsOptions = {}) {
       setBusyNodeIds((s) => new Set(s).add(nodeId));
       useGraphStore.getState().setNodeGenerating(nodeId, true);
       try {
+        // Same context shape multi-select gives the model: a whole-wall
+        // overview (so a recompute doesn't drift out of step with what
+        // else exists on the wall) plus this node's full content/ancestors.
+        const recomputeContext = `${buildWallContext(node.chatId)}\n\nRecomputing:\n${buildContextNote([nodeId], true)}`;
         const response = await generateGraph({
           mode: "recompute",
           providerId: cfg.providerId,
@@ -487,7 +491,7 @@ export function useGraphActions(opts: UseGraphActionsOptions = {}) {
           model: cfg.model,
           chatId: node.chatId,
           userPrompt: changeDescription,
-          contextNote: buildContextNote([nodeId]),
+          contextNote: recomputeContext,
           signal: newAbort(),
         });
         const spec = response.nodes[0];

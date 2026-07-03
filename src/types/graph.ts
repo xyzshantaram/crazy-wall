@@ -154,6 +154,20 @@ export interface Chat {
   started: boolean;
   /** Ordered history of every prompt sent to this wall. */
   promptLog?: PromptLogEntry[];
+  /** Running total of token usage/cost across every generateGraph() call
+   *  ever made for this wall, persisted so it survives reload. Shape
+   *  mirrors stores/usageStore.ts's UsageTotals (duplicated here rather than
+   *  imported, since this is the persisted domain type and shouldn't
+   *  depend on a store module). */
+  cumulativeUsage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cachedTokens: number;
+    reasoningTokens: number;
+    costUsd: number;
+    hasRealCost: boolean;
+  };
 }
 
 export interface AppState {
